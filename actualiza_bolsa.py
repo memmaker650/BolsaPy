@@ -4,6 +4,7 @@ import os
 import math
 import datetime as dt
 from datetime import datetime, timedelta
+from openpyxl import load_workbook
 
 try:
     import pandas as pd
@@ -38,10 +39,9 @@ HOJA = "Resumen"
 
 # Columnas solicitadas
 COLUMNAS = [
-    "Nombre", "Ticker", "Mercado", "Valor actual", "Variación respecto ayer",
-    "Variación respecto hace una semana", "Variación respecto hace 3 meses",
-    "Mínimo último mes", "Mínimo último año", "Máximo último mes", "Máximo último año",
-    "Máximo de siempre", "Última noticia relevante"
+    "Nombre", "Ticker", "Mercado", "Fecha", "Valor actual", "Δ ayer",
+    "Δ semana", "Δ 3 meses", "Mínimo mes", "Mínimo año", "Máximo mes", "Máximo año",
+    "Máximo absoluto", "Última noticia relevante"
 ]
 
 # -----------------------------
@@ -52,11 +52,14 @@ def last_close_before(df, target_date):
     """Devuelve el último cierre disponible en o antes de target_date (fecha calendario)."""
     if df.empty:
         return None
+
     # Asegurar índice tipo datetime y ordenado
     s = df.sort_index()
     s = s.loc[s.index <= pd.to_datetime(target_date)]
+
     if s.empty:
         return None
+
     return float(s["Close"].iloc[-1].squeeze())
 
 
@@ -64,6 +67,7 @@ def pct(a, b):
     """Variación porcentual (a vs b). Devuelve string con % y 2 decimales."""
     if a is None or b is None or b == 0 or (isinstance(b, float) and (math.isnan(b) or b == 0)):
         return ""
+
     return f"{(a/b - 1)*100:.2f}%"
 
 
@@ -73,6 +77,18 @@ def pct(a, b):
 import pandas as pd
 
 resumen_rows = []
+
+print(f"Mover datos antiguos para hacer hueco a los nuevos datos.")
+wb = load_workbook(SALIDA_XLSX)
+ws = wb["Resumen"]
+ultima_fila = ws.max_row
+print(f"Obtener última línea:", ultima_fila)
+numTickers = len(TICKERS)
+ws.insert_rows(2, amount=numTickers)
+wb.save(SALIDA_XLSX)
+
+# Obtengo la fecha de hoy
+hoy_str = datetime.today().strftime("%d/%m/%Y")
 
 for nombre, ticker in TICKERS.items():
     print(f"Procesando {nombre} ({ticker})...")
@@ -171,15 +187,16 @@ for nombre, ticker in TICKERS.items():
         "Nombre": nombre,
         "Ticker": ticker,
         "Mercado": mercado,
+        "Fecha": hoy_str,
         "Valor actual": fmt(valor_actual) if valor_actual != "" else "",
-        "Variación respecto ayer": var_dia,
-        "Variación respecto hace una semana": var_1w,
-        "Variación respecto hace 3 meses": var_3m,
-        "Mínimo último mes": fmt(min_30),
-        "Mínimo último año": fmt(min_365),
-        "Máximo último mes": fmt(max_30),
-        "Máximo último año": fmt(max_365),
-        "Máximo de siempre": fmt(max_all),
+        "Δ ayer": var_dia,
+        "Δ semana": var_1w,
+        "Δ 3 meses": var_3m,
+        "Mínimo mes": fmt(min_30),
+        "Mínimo año": fmt(min_365),
+        "Máximo mes": fmt(max_30),
+        "Máximo año": fmt(max_365),
+        "Máximo absoluto": fmt(max_all),
         "Última noticia relevante": noticia,
     }
     resumen_rows.append(fila)
@@ -188,7 +205,17 @@ for nombre, ticker in TICKERS.items():
 resumen_df = pd.DataFrame(resumen_rows, columns=COLUMNAS)
 
 # Guardar Excel (una sola hoja "Resumen")
-with pd.ExcelWriter(SALIDA_XLSX, engine="openpyxl") as writer:
+with pd.ExcelWriter(SALIDA_XLSX, engine="openpyxl", mode="a",
+    if_sheet_exists="overlay"  # o "overlay"/"new" según lo que quieras
+    ) as writer:
     resumen_df.to_excel(writer, sheet_name=HOJA, index=False)
-
+    
+    # Ajustar el ancho de las celdas.
+    hoja = writer.sheets[HOJA]
+    for col_idx, col_name in enumerate(resumen_df.columns, start=1):
+        max_len = max(
+            [len(str(col_name))] +
+            [len(str(v)) for v in resumen_df[col_name].values]
+        )
+        hoja.column_dimensions[hoja.cell(row=1, column=col_idx).column_letter].width = max_len + 2
 print(f"[OK] Archivo actualizado: {SALIDA_XLSX}")

@@ -23,12 +23,12 @@ from dataclasses import dataclass
 # -----------------------------
 @dataclass
 class ValuationConfig:
-    discount_rate: float = 0.10       # r para DCF y Gordon
-    terminal_growth: float = 0.02     # g perpetuo (debe ser < r)
-    dcf_years: int = 5                # años de proyección
-    revenue_multiple: Optional[float] = None  # si quieres usar múltiplo ingresos (no recomendado por defecto)
-    neutrality_band: float = 0.10     # banda ±10% para clasificar "En línea"
-    override_sector_pe: Dict[str, float] = None  # PER sectorial por ticker, e.g. {"AAPL": 25}
+    discount_rate: float = 0.10                     # r para DCF y Gordon
+    terminal_growth: float = 0.02                   # g perpetuo (debe ser < r)
+    dcf_years: int = 5                              # años de proyección
+    revenue_multiple: Optional[float] = None        # si quieres usar múltiplo ingresos (no recomendado por defecto)
+    neutrality_band: float = 0.10                   # banda ±10% para clasificar "En línea"
+    override_sector_pe: Dict[str, float] = None     # PER sectorial por ticker, e.g. {"AAPL": 25}
 
 def safe_div(a: float, b: float) -> Optional[float]:
     try:
@@ -166,6 +166,7 @@ def get_company_data(ticker: str) -> Dict[str, Any]:
     if fcf_ttm is None:
         ocf_ttm = _row_value_sum_last(q_cf, ["Operating Cash Flow", "Total Cash From Operating Activities"])
         capex_ttm = _row_value_sum_last(q_cf, ["Capital Expenditures", "Capital Expenditure"])
+        
         if ocf_ttm is not None and capex_ttm is not None:
             fcf_ttm = float(ocf_ttm) - float(capex_ttm)
 
@@ -317,7 +318,7 @@ def value_tickers(tickers: List[str], cfg: ValuationConfig) -> pd.DataFrame:
 # -----------------------------
 if __name__ == "__main__":
     # Define tus tickers (usa formato de Yahoo Finance, p.ej. "MSFT", "AAPL", "NESN.SW", "^IBEX" no es acción)
-    tickers = ["MSFT", "AAPL", "NVDA"]
+    tickers = ["MSFT", "AAPL", "NVDA", "WKL.AS"]
 
     # Si conoces PER sectorial de alguna, indícalo aquí (ejemplo):
     override_pe = {
