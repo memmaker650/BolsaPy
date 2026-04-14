@@ -1,0 +1,11 @@
+
+*** SQLite local + sincronización (recomendado con Toga)
+------------------------------------------------------------
+
+[iOS App]        [Mac App]
+     │                │
+     └── SQLite local ─┘
+             │
+        API REST (tu servidor)
+             │
+         Base de datos central
