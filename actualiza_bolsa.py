@@ -78,7 +78,6 @@ class BolsaPy:
         self.conn.close()
 
 
-
     SALIDA_XLSX = "bolsa_resumen_auto.xlsx"
     HOJA = "Resumen"
 
