@@ -2,7 +2,9 @@
 import sys
 import os
 import math
+import time
 import datetime as dt
+import concurrent.futures
 from datetime import datetime, timedelta
 from openpyxl import load_workbook
 
@@ -36,6 +38,7 @@ class BolsaPy:
         "Wolters Kluwer": "WKL.AS",
         "Apple": "AAPL",
         "Telefónica": "TEF.MC", 
+        "Amadeus": "AMS.MC",
         "Banco Santander": "SAN",
         "Banco Sabadell": "SAB.MC",
         "BBVA": "BBVA",
@@ -51,12 +54,17 @@ class BolsaPy:
         "Amadeus": "AMS",
         "Grifols": "GRF",
         "Inditex (Zara)": "ITX.MC",
+        "Repsol": "REP.MC",
         "YPF": "YPF",
+        "Endesa": "ELE.MC",
         "Iberdrola": "IBE.MC",
+        "NIKE": "NKE",
+        "ADIDAS": "ADS.DE",
+        "ASICS": "7936.T",
     }
 
     # -----------------------------
-    # CONEXIÓN CON BDD
+    # OPERACIONES CON BDD
     # -----------------------------
     def conectarBDD(self):
         db_path = Path.home() / "Library" / "Application Support" / "mi_app" / "data.db"
@@ -66,13 +74,48 @@ class BolsaPy:
         cursor = self.conn.cursor()
 
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
+            CREATE TABLE IF NOT EXISTS valores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT,
-            fecha TEXT
+            TICKERS TEXT,
+            Mercado TEXT, 
+            Fecha Date, 
+            Valor_actual NUMERIC, 
+            Delta_ayer NUMERIC,
+            Delta_semana NUMERIC, 
+            Delta_3meses NUMERIC, 
+            MinimoMes NUMERIC, 
+            Minimo_Agno NUMERIC, 
+            Maximo_Mes NUMERIC, 
+            Maximo_Agno NUMERIC,
+            Maximo_Absoluto NUMERIC, 
+            Ultima_Noticia_Relevante NUMERIC
         )""")
 
         self.conn.commit()
+
+    def escribirBDD(self, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14):
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO valores (
+            nombre,
+            TICKERS,
+            Mercado, 
+            Fecha, 
+            Valor_actual, 
+            Delta_ayer,
+            Delta_semana, 
+            Delta_3meses, 
+            MinimoMes, 
+            Minimo_Agno, 
+            Maximo_Mes, 
+            Maximo_Agno,
+            Maximo_Absoluto , 
+            Ultima_Noticia_Relevante
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14))
+
 
     def cerrarBDD(self):
         self.conn.close()
@@ -99,7 +142,15 @@ class BolsaPy:
 
         # Asegurar índice tipo datetime y ordenado
         s = df.sort_index()
-        s = s.loc[s.index <= pd.to_datetime(target_date)]
+        idx = s.index
+        target_ts = pd.to_datetime(target_date)
+        # Evita comparar tz-aware vs tz-naive (p. ej. Europe/Madrid vs Timestamp naive).
+        if getattr(idx, "tz", None) is not None and target_ts.tzinfo is None:
+            target_ts = target_ts.tz_localize(idx.tz)
+        elif getattr(idx, "tz", None) is None and target_ts.tzinfo is not None:
+            target_ts = target_ts.tz_localize(None)
+
+        s = s.loc[idx <= target_ts]
 
         if s.empty:
             return None
@@ -113,6 +164,38 @@ class BolsaPy:
             return ""
 
         return f"{(a/b - 1)*100:.2f}%"
+
+    def _normalize_history_index(self, df):
+        if isinstance(df, pd.DataFrame) and not df.empty and getattr(df.index, "tz", None) is not None:
+            df = df.copy()
+            df.index = df.index.tz_localize(None)
+        return df
+
+    def _get_history_safe(self, ticker, period="max"):
+        """
+        Descarga robusta con reintento y fallback.
+        yfinance a veces devuelve TypeError('NoneType'...) de forma intermitente.
+        """
+        last_error = None
+        for attempt in range(2):
+            try:
+                tk = self.yf.Ticker(ticker)
+                hist = tk.history(period=period, interval="1d", auto_adjust=False, timeout=12)
+                return tk, self._normalize_history_index(hist)
+            except Exception as e:
+                last_error = e
+                time.sleep(0.5 * (attempt + 1))
+
+        try:
+            # Fallback alternativo cuando history() falla internamente.
+            hist = self.yf.download(
+                ticker, period=period, interval="1d", auto_adjust=False, progress=False, threads=False
+            )
+            return self.yf.Ticker(ticker), self._normalize_history_index(hist)
+        except Exception as e:
+            last_error = e
+            print(f"  [WARN] No se pudo descargar {ticker}: {last_error}")
+            return self.yf.Ticker(ticker), pd.DataFrame()
 
 
     # -----------------------------
@@ -136,15 +219,8 @@ class BolsaPy:
 
         for nombre, ticker in self.TICKERS.items():
             print(f"Procesando {nombre} ({ticker})...")
-            try:
-                # Serie 400 días para cálculos 1w, 1m, 3m, 1y
-                hist = self.yf.download(ticker, period="400d", interval="1d", auto_adjust=False, progress=False)
-                # Serie completa para máximo histórico
-                hist_all = self.yf.download(ticker, period="max", interval="1d", auto_adjust=False, progress=False)
-            except Exception as e:
-                print(f"  [WARN] No se pudo descargar {ticker}: {e}")
-                hist = pd.DataFrame()
-                hist_all = pd.DataFrame()
+            tk, hist_all = self._get_history_safe(ticker, period="max")
+            hist = hist_all.tail(400) if not hist_all.empty else pd.DataFrame()
 
             # Mercado (sufijo simplificado por exchange)
             mercado = ""
@@ -203,8 +279,14 @@ class BolsaPy:
             # Última noticia
             noticia = ""
             try:
-                t = self.yf.Ticker(ticker)
-                news = getattr(t, 'news', None)
+                def _fetch_news():
+                    return getattr(tk, "news", None)
+
+                # Evita que una llamada lenta de noticias bloquee todo el proceso.
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_fetch_news)
+                    news = future.result(timeout=8)
+
                 if news:
                     first = news[0]
                     tit = first.get('title', '')
@@ -245,8 +327,11 @@ class BolsaPy:
             }
             resumen_rows.append(fila)
 
+            self.escribirBDD(nombre, ticker, mercado, hoy_str, fmt(valor_actual) if valor_actual != "" else "", var_dia, var_1w, var_3m, fmt(min_30), fmt(min_365), fmt(max_30), fmt(max_365), fmt(max_all), noticia)
+
         # Construcción del DataFrame final
         self.resumen_df = pd.DataFrame(resumen_rows, columns=self.COLUMNAS)
+        self.conn.commit()
 
     def guardadoEnExcel(self):
         # Guardar Excel (una sola hoja "Resumen")
@@ -266,8 +351,12 @@ class BolsaPy:
         print(f"[OK] Archivo actualizado: {self.SALIDA_XLSX}")
 
     def lanzarAcciones(self):
-        self.descargaYCalculoTickers()
-        self.guardadoEnExcel()
+        self.conectarBDD()
+        try:
+            self.descargaYCalculoTickers()
+            self.guardadoEnExcel()
+        finally:
+            self.cerrarBDD()
 
 def main():
     app = BolsaPy()
