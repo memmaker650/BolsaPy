@@ -14,7 +14,7 @@ import sqlite3
 from pathlib import Path
 
 
-class BolsaPy:
+class ActualizaBolsa:
     conn = None
     resumen_df = None
 
@@ -359,7 +359,7 @@ class BolsaPy:
             self.cerrarBDD()
 
 def main():
-    app = BolsaPy()
+    app = ActualizaBolsa()
     app.lanzarAcciones()
     
 if __name__ == "__main__":
