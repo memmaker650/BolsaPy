@@ -55,6 +55,9 @@ class BolsaPy(toga.App):
     sqliteConnection = None
     db_path = None
 
+    valorCompraTotal = 0
+    valorTotalActual = 0
+
     TICKERS_BASE = {
         "Repsol": "REP.MC",
         "Wolters Kluwer": "WKL.AS",
@@ -180,10 +183,37 @@ class BolsaPy(toga.App):
             style=Pack(direction=COLUMN, margin_left=40, alignment=LEFT)
         )
 
+        filas = []
+        try:
+            self.cursor.execute("""SELECT nombre, TICKER, Num_acciones, Valor_compra from acciones""")
+            filas = self.cursor.fetchall()   # lista de tuplas (nombre, tipov)
+        except sqlite3.Error as error:
+            logging.error(" Error al seleccionar Acciones del Usuario, tabla acciones en SQLite %s", error)
+
+        # Texto inicial encima del botón
+        self.label = toga.Label(
+            "Acciones de tu Cartera Personal: ",
+            style=Pack(margin_bottom=20, text_align=CENTER)
+        )
+
         titulo_estado = "Título"  # Cambia esto por tu título
-        valor_numerico_estado = 0  # Cambia esto por tu valor numérico
+        valor_numerico_estado = len(filas)
         porcentaje_estado = 0.0  # Cambia esto por tu porcentaje (0-100)
-        semaforo_estado = "verde"  # "rojo" | "amarillo" | "verde"
+        semaforo_estado = "amarillo"  # "rojo" | "amarillo" | "verde"
+
+        # Recalcular total cada vez que se construye la pantalla.
+        self.valorCompraTotal = 0.0
+        for _, _, numAcciones, valorCompra in filas:
+            try:
+                num_acciones_val = float(str(numAcciones).replace(",", "."))
+                valor_compra_val = float(str(valorCompra).replace(",", "."))
+                self.valorCompraTotal += num_acciones_val * valor_compra_val
+            except (TypeError, ValueError):
+                logging.warning(
+                    "Valor no numerico en acciones (Num_acciones=%s, Valor_compra=%s). Se omite del total.",
+                    numAcciones,
+                    valorCompra,
+                )
         
         encabezado_box = toga.Box(
             style=Pack(direction=COLUMN, align_items=CENTER)
@@ -197,7 +227,7 @@ class BolsaPy(toga.App):
             style=Pack(direction=ROW, align_items=CENTER)
         )
         valor_label = toga.Label(
-            str(valor_numerico_estado),
+            str(self.valorCompraTotal),
             style=Pack(text_align=CENTER, font_size=18),
         )
         semaforo_label = toga.Label(
@@ -211,6 +241,29 @@ class BolsaPy(toga.App):
             f"{porcentaje_estado}%",
             style=Pack(text_align=CENTER, font_size=18),
         )
+
+        encabezado_box.add(caja_estado)
+        contenido_box.add(encabezado_box)
+
+        contenido_box.add(self.label)
+
+        print("Numero de Acciones Personales:", valor_numerico_estado)
+
+        if filas:
+            for nombre, ticker, numAcciones, valorCompra in filas:
+                print("Nombre:", nombre, "TICKER:", ticker) 
+
+                cadena = nombre + "-" + ticker # Concatener 2 string añadiendo un salto de línea. " \n "
+
+                # Botón que cambia el texto (ahora circular con símbolo '+')
+                boton = toga.Button(cadena, on_press=lambda widget, valor=cadena: self.ir_a_pantalla_tres(widget, valor),
+                style=Pack(width=140, height=60, padding=0))
+                fila_boton = toga.Box(style=Pack(direction=ROW))
+                fila_boton.add(toga.Box(style=Pack(flex=1)))
+                fila_boton.add(boton)
+                fila_boton.add(toga.Box(style=Pack(flex=1)))
+
+                contenido_box.add(fila_boton)
 
         # Espaciador vertical para empujar la barra inferior hacia abajo
         espaciador_vertical = toga.Box(style=Pack(flex=1))
@@ -251,8 +304,6 @@ class BolsaPy(toga.App):
         caja_estado.add(valor_label)
         caja_estado.add(semaforo_label)
         caja_estado.add(porcentaje_label)
-        encabezado_box.add(caja_estado)
-        contenido_box.add(encabezado_box)
         
         barra_inferior.add(boton_descargar)
         barra_inferior.add(espaciador_horizontal)
@@ -473,8 +524,8 @@ class BolsaPy(toga.App):
     def ir_a_pantalla_dos(self, widget):
         self.main_window.content = self.construir_pantalla_dos()
 
-    # -------- Pantalla info (3) --------
-    def construir_pantalla_uno(self):
+    # -------- Pantalla info --------
+    def construir_pantalla_info(self):
         # =========================
         # Header (Pantalla info)
         # =========================
@@ -572,7 +623,7 @@ class BolsaPy(toga.App):
         return main_box
 
     def ir_a_pantalla_info(self, widget):
-        self.main_window.content = self.construir_pantalla_detalles()    
+        self.main_window.content = self.construir_pantalla_info()    
 
     # -------- Pantalla 3 --------
     def construir_pantalla_detalles(self):
@@ -654,8 +705,8 @@ class BolsaPy(toga.App):
 
         return main_box
 
-    def ir_a_pantalla_tres(self, widget, valor):
-        self.main_window.content = self.construir_pantalla_detalles(valor)
+    def ir_a_pantalla_tres(self, widget, valor=None):
+        self.main_window.content = self.construir_pantalla_detalles()
 
     def iniciar_tarea(self, widget):
         self.add_background_task(self.tarea_larga)
