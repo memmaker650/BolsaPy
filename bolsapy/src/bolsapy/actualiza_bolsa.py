@@ -17,6 +17,7 @@ from pathlib import Path
 class ActualizaBolsa:
     conn = None
     resumen_df = None
+    db_path = None
 
     try:
         import pandas as pd
@@ -67,10 +68,7 @@ class ActualizaBolsa:
     # OPERACIONES CON BDD
     # -----------------------------
     def conectarBDD(self):
-        db_path = Path.home() / "Library" / "Application Support" / "mi_app" / "data.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        self.conn = sqlite3.connect(db_path)
+        self.conn = sqlite3.connect(self.db_path)
         cursor = self.conn.cursor()
 
         cursor.execute("""
@@ -134,7 +132,6 @@ class ActualizaBolsa:
     # Utilidades de fechas
     # -----------------------------
     # -----------------------------
-
     def last_close_before(self, df, target_date):
         """Devuelve el último cierre disponible en o antes de target_date (fecha calendario)."""
         if df.empty:
@@ -201,7 +198,6 @@ class ActualizaBolsa:
     # -----------------------------
     # Descarga y cálculo por ticker
     # -----------------------------
-
     def descargaYCalculoTickers(self):
         resumen_rows = []
 
@@ -350,7 +346,7 @@ class ActualizaBolsa:
                 hoja.column_dimensions[hoja.cell(row=1, column=col_idx).column_letter].width = max_len + 2
         print(f"[OK] Archivo actualizado: {self.SALIDA_XLSX}")
 
-    def lanzarAcciones(self):
+    def lanzarAcciones(self, widget=None):
         self.conectarBDD()
         try:
             self.descargaYCalculoTickers()

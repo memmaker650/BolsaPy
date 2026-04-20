@@ -13,6 +13,7 @@ import asyncio
 from pathlib import Path
 
 import actualiza_bolsa
+import valoracion_intrinseca
 
 class AppPaths:
     app = None
@@ -52,6 +53,37 @@ class AppPaths:
 class BolsaPy(toga.App):
     cursor = None
     sqliteConnection = None
+    db_path = None
+
+    TICKERS_BASE = {
+        "Repsol": "REP.MC",
+        "Wolters Kluwer": "WKL.AS",
+        "Apple": "AAPL",
+        "Telefónica": "TEF.MC", 
+        "Amadeus": "AMS.MC",
+        "Banco Santander": "SAN",
+        "Banco Sabadell": "SAB.MC",
+        "BBVA": "BBVA",
+        "OHLA": "OHLA.MC",
+        "Sacyr": "SCYR.MC",
+        "AENA": "AENA.MC",
+        "Acciona": "ANA.MC",
+        "Ferrovial": "FER",
+        "Atos": "ATO.PA",
+        "Alten": "ATE.PA",
+        "Sopra Steria": "SOP.PA",
+        "Indra": "IDR.MC",
+        "Amadeus": "AMS",
+        "Grifols": "GRF",
+        "Inditex (Zara)": "ITX.MC",
+        "Repsol": "REP.MC",
+        "YPF": "YPF",
+        "Endesa": "ELE.MC",
+        "Iberdrola": "IBE.MC",
+        "NIKE": "NKE",
+        "ADIDAS": "ADS.DE",
+        "ASICS": "7936.T",
+    }
 
     def startup(self):
         """Construct and show the Toga application.
@@ -118,15 +150,12 @@ class BolsaPy(toga.App):
             CREATE TABLE IF NOT EXISTS acciones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT,
-            TICKERS TEXT,
+            TICKER TEXT,
             Mercado TEXT, 
             FechaCompra Date,
             Num_acciones INTEGER, 
             Valor_compra NUMERIC,  
-            Valor_actual NUMERIC, 
-            Delta_ayer NUMERIC,
-            Delta_semana NUMERIC, 
-            Delta_3meses NUMERIC
+            tiempo_custodia INTEGER
         )""")
 
         self.sqliteConnection.commit()
@@ -521,21 +550,13 @@ class BolsaPy(toga.App):
         # archivoscomponentes (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
         try:
             cursor = self.sqliteConnection.cursor()
-            cursor.execute(
-                "SELECT elemento, descripcion, fechaInsercion, distanciaLimite, 'x', tiempoLimite, activo "
-                "FROM archivoscomponentes WHERE usuario = ?",
-                (self.usuarioSeleccionado,),
-            )
+            cursor.execute("""SELECT id, nombre, ticker, Valor_compra, Tiempo_custodia,' ' FROM acciones""")
             dataTable = cursor.fetchall()
         except sqlite3.Error as error:
             logging.error("Error en el SELECT de la TABLA Comp: %s", error)
-            print("Error en el SELECT de la TABLA Comp: %s", error)
-            data=[("Juan", "Madrid", "08-07-1984", 5000, 1249, 300, "True"),
-                ("Ana", "Barcelona","06-08-2020", 2500, 2300, 125, "False"),
-                ("Luis", "Zaragoza","28-11-2023", 3300, 256, 120, "True"),
-            ]
+            print("Error en el SELECT de la TABLA Acciones: %s", error)
         finally:
-            self.label_pantalla_dos.text = "Datos de la TABLA COMP leídos  correctamente."
+            self.label_pantalla_dos.text = "Datos de la TABLA Acciones leídos  correctamente."
             self.label_pantalla_dos.style.color = rgb(0, 255, 0)
             logging.info("Datos de TABLA LEÍDOS correctamente.")
             if dataTable is not None:
@@ -550,7 +571,7 @@ class BolsaPy(toga.App):
 
         # Definir tabla con cabeceras
         self.tabla = toga.Table(
-            headings=["Componente", "Descripción", "Fecha", "Distancia Max Comp", "Distancia desde Inserción", "Tiempo Montado", "Activo"],
+            headings=["id", "Nombre", "TICKER", "Num Acciones", "Valor compra", "Tiempo Custodia", "Valor actual"],
             data=data,
             style=Pack(height=_altura_tabla),
         )
@@ -613,6 +634,7 @@ class BolsaPy(toga.App):
         )
 
         AB = actualiza_bolsa.ActualizaBolsa()
+        AB.db_path = self.db_path
         # Barra de progreso
         self.progress = toga.ProgressBar(max=self.total,
             value=0, style=Pack(padding=10))
@@ -627,8 +649,10 @@ class BolsaPy(toga.App):
         boton_iniciar = toga.Button("Iniciar", on_press=self.iniciar_tarea, style=Pack(padding=10))
         box.add(boton_iniciar)
 
-        boton_datos = toga.Button("Extraer Datos Strava", on_press=AB.lanzarAcciones, style=Pack(padding=10))
+        boton_datos = toga.Button("Extraer Datos Bolsa", on_press=AB.lanzarAcciones, style=Pack(padding=10))
         box.add(boton_datos)
+        boton_valoracion = toga.Button("Calcular valoración Stocks", on_press=self.preparacion_ValuationConfig, style=Pack(padding=10))
+        box.add(boton_valoracion)
 
         # Barra inferior con botón a la izquierda (por defecto)
         barra_inferior = toga.Box(
@@ -640,6 +664,10 @@ class BolsaPy(toga.App):
             style=Pack(margin=10)
         )
 
+        # Espaciador vertical para empujar la barra inferior hacia abajo
+        espaciador_vertical = toga.Box(style=Pack(flex=1))
+        box.add(espaciador_vertical)
+
         barra_inferior.add(boton_volver)
         box.add(barra_inferior)
 
@@ -647,6 +675,24 @@ class BolsaPy(toga.App):
         # self.main_window.content = box
         # self.main_window.show()
         return box
+
+    def preparacion_ValuationConfig(self, widget=None):
+        override_pe = {
+                "MSFT": 30.0,
+                "AAPL": 28.0
+                # "NVDA": 35.0
+        }
+
+        tickers = list(self.TICKERS_BASE.values())
+
+        ValC = valoracion_intrinseca.ValuationConfig(discount_rate=0.10,
+                                                    terminal_growth=0.02,
+                                                    dcf_years=5,
+                                                    override_sector_pe=override_pe,
+                                                    neutrality_band=0.10)
+        ValC.db_path = self.db_path
+        df = ValC.value_tickers(tickers)
+        print(df)
 
 def main():
     return BolsaPy("BolsaPy App", "com.SkullWithGasMask", icon="resources/icon.png")

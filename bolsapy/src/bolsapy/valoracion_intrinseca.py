@@ -34,12 +34,11 @@ class ValuationConfig:
 
     # variables sqlite.
     conectorDB = None
+    db_path = None
 
     def chequearBDD(self) -> bool:
-        db_path = Path.home() / "Library" / "Application Support" / "mi_app" / "data.db"
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        print("Ruta BDD: ", db_path)
-        self.conectorDB = sqlite3.connect(db_path)
+        print("Ruta BDD: ", self.db_path)
+        self.conectorDB = sqlite3.connect(self.db_path)
         cursor = self.conectorDB.cursor()
 
         try:
@@ -336,7 +335,7 @@ class ValuationConfig:
             return "Sobrevalorada"
         return "En línea"
     
-    def value_tickers(self, tickers: List[str]) -> pd.DataFrame:
+    def value_tickers(self, tickers: List[str], widget=None) -> pd.DataFrame:
         rows = []
         for t in tickers:
             data = self.get_company_data(t)
