@@ -272,7 +272,7 @@ class BolsaPy(toga.App):
             style=Pack(direction=COLUMN, margin_left=40, align_items='start')
         )
 
-        tituloSreen5 = "Añadir Componente: X"
+        tituloSreen5 = "Añadir Acción a la Bolsa Personal: X"
 
         self.label_pantalla_dos = toga.Label(
             tituloSreen5,
@@ -285,12 +285,12 @@ class BolsaPy(toga.App):
         caja_fecha = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
 
         label_fecha = toga.Label(
-            "Fecha",
+            "Fecha Compra Acción",
             style=Pack(margin_right=10)
         )
 
         self.entrada_fecha = toga.TextInput(
-            placeholder="Fecha instalación",
+            placeholder="Fecha compra",
             style=Pack(width=250),
             value=datetime.date.today().strftime("%Y-%m-%d")
         )
@@ -299,105 +299,105 @@ class BolsaPy(toga.App):
         caja_fecha.add(self.entrada_fecha)
 
         # Caja con dropdown "Elemento"
-        tipos_elemento = []
+        mercado = []
         try:
             cursor = self.sqliteConnection.cursor()
-            cursor.execute("SELECT nombre FROM Elemento ORDER BY nombre")
-            tipos_elemento = [row[0] for row in cursor.fetchall()]
+            cursor.execute("SELECT nombre FROM Mercados ORDER BY nombre")
+            mercado = [row[0] for row in cursor.fetchall()]
         except sqlite3.Error as error:
-            logging.error("Error al leer tabla Elemento %s", error)
+            logging.error("Error al leer tabla Mercados %s", error)
 
         # Si no hay datos en la tabla Elemento, usamos una lista por defecto
-        if not tipos_elemento:
-            tipos_elemento = ["Cadena", "Pastillas Freno", "Cubiertas"]
+        if not mercado:
+            mercado = ["USA", "España", "Alemania", "Francia", "Japón", "UK"]
 
-        caja_elemento = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
+        caja_mercado = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
 
-        label_elemento = toga.Label(
-            "Elemento",
+        label_mercado = toga.Label(
+            "Mercado : ",
             style=Pack(margin_right=10)
         )
 
-        self.selection_elemento = toga.Selection(
-            items=tipos_elemento,
+        self.seleccion_mercado = toga.Selection(
+            items=mercado,
             style=Pack(width=250)
         )
 
         # Caja con label "Descripción" a la izquierda y campo de texto a la derecha
-        caja_descripcion = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
+        caja_nombre = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
 
-        label_descripcion = toga.Label(
-            "Descripción: ",
+        label_nombre = toga.Label(
+            "Nombre Compañía : ",
             style=Pack(margin_right=10)
         )
 
-        self.descripcion_texto = toga.TextInput(
-            placeholder="Escribe algo...",
+        self.nombre_texto = toga.TextInput(
+            placeholder="Escribe nombre comp...",
             style=Pack(width=250)
         )
 
         # Caja con label "Marca" a la izquierda y campo de texto a la derecha
-        caja_marca = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
+        caja_ticker = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
 
-        label_marca = toga.Label(
-            "Marca Comp: ",
+        label_ticker = toga.Label(
+            "TICKER: ",
             style=Pack(margin_right=10)
         )
 
-        self.marca_texto = toga.TextInput(
-            placeholder="Escribe algo...",
+        self.ticker_texto = toga.TextInput(
+            placeholder="TICKER si lo conoces...",
             style=Pack(width=250)
         )
 
         # Caja con label "Marca" a la izquierda y campo de texto a la derecha
-        caja_tiempolim = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
+        caja_precioCompra = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
 
-        label_tiempolim = toga.Label(
-            "Tiempo Límite: ",
+        label_precioCompra = toga.Label(
+            "precio Compra: ",
             style=Pack(margin_right=10)
         )
 
-        self.tiempolim_texto = toga.TextInput(
-            placeholder="Escribe algo...",
+        self.precioCompra_texto = toga.TextInput(
+            placeholder="Precio compra...",
             style=Pack(width=250)
         )
 
         # Caja con label "Marca" a la izquierda y campo de texto a la derecha
-        caja_distancialim = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
+        caja_numAcciones = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
 
-        label_distancialim = toga.Label(
-            "Distancia Límite: ",
+        label_numAcciones = toga.Label(
+            "Número de Acciones:  ",
             style=Pack(margin_right=10)
         )
 
-        self.distancialim_texto = toga.TextInput(
-            placeholder="Escribe algo...",
+        self.numAcciones_texto = toga.TextInput(
+            placeholder="Escribe Num Acciones...",
             style=Pack(width=250)
         )
 
         boton_Cargar = toga.Button(
             "Cargar",
-            on_press=lambda widget:self.cargar_componente(self.entrada_fecha, self.usuarioSeleccionado, self.selection_elemento, self.descripcion_texto, self.marca_texto, self.distancialim_texto, self.tiempolim_texto),
+            on_press=lambda widget:self.cargar_componente(self.entrada_fecha, self.seleccion_mercado, self.nombre_texto, self.ticker_texto, self.precioCompra_texto, self.numAcciones_texto),
             style=Pack(margin=10)
         )
 
-        caja_elemento.add(label_elemento)
-        caja_elemento.add(self.selection_elemento)
-        caja_descripcion.add(label_descripcion)
-        caja_descripcion.add(self.descripcion_texto)
-        caja_marca.add(label_marca)
-        caja_marca.add(self.marca_texto)
-        caja_distancialim.add(label_distancialim)
-        caja_distancialim.add(self.distancialim_texto)
-        caja_tiempolim.add(label_tiempolim)
-        caja_tiempolim.add(self.tiempolim_texto)
+        caja_mercado.add(label_mercado)
+        caja_mercado.add(self.seleccion_mercado)
+        caja_nombre.add(label_nombre)
+        caja_nombre.add(self.nombre_texto)
+        caja_ticker.add(label_ticker)
+        caja_ticker.add(self.ticker_texto)
+        caja_precioCompra.add(label_precioCompra)
+        caja_precioCompra.add(self.precioCompra_texto)
+        caja_numAcciones.add(label_numAcciones)
+        caja_numAcciones.add(self.numAcciones_texto)
         
         contenido_box.add(caja_fecha)
-        contenido_box.add(caja_elemento)
-        contenido_box.add(caja_descripcion)
-        contenido_box.add(caja_marca)
-        contenido_box.add(caja_distancialim)
-        contenido_box.add(caja_tiempolim)
+        contenido_box.add(caja_mercado)
+        contenido_box.add(caja_nombre)
+        contenido_box.add(caja_ticker)
+        contenido_box.add(caja_precioCompra)
+        contenido_box.add(caja_numAcciones)
         
         contenido_box.add(boton_Cargar)
 
@@ -421,6 +421,54 @@ class BolsaPy(toga.App):
         main_box.add(barra_inferior)
 
         return main_box
+
+    # CCREATE TABLE acciones ( id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT, TICKER TEXT, Mercado TEXT, FechaCompra Date, Num_acciones INTEGER, Valor_compra NUMERIC, tiempo_custodia INTEGER )
+    def anadirComponente(self, valor1, valor2, valor3, valor4, valor5, valor6=None):
+        logging.info("Dentro añadir Componente.")
+
+        tiempolim = 500
+        distlim = 5000
+
+        #if not (mi_textinput.value or "").strip():
+        if not (valor5.value or "").strip():
+            valor5 = distlim
+        else:
+            valor5 = valor5.value
+        if not (valor6.value or "").strip():
+            valor6 = tiempolim
+        else:
+            valor6 = valor6.value
+        
+        f = f = (valor1.value or "").strip() or datetime.today().strftime("%Y-%m-%d")
+        print("Fecha de Compra : ", f)
+        print("Mercado : ", valor2.value)
+        print("Nombre : ", valor3.value)
+        print("Ticker : ", valor4.value)
+        print("Número Acciones : ", valor5)
+        print("Precio Compra : ", valor6)
+
+        try:
+            cursor = self.sqliteConnection.cursor()
+            cursor.execute(
+                "INSERT INTO acciones (FechaCompra, Mercado, nombre, TICKER, Num_acciones, Valor_compra) VALUES (?, ?, ?, ?, ?, ?)",
+                (f, valor2.value, valor3.value, valor4.value, valor5, valor6)
+            )
+            self.sqliteConnection.commit()
+            self.label_pantalla_dos.text = "Acciones cargada correctamente."
+            self.label_pantalla_dos.style.color = rgb(0, 255, 0)
+            logging.info("Datos de Acciones cargados correctamente.")
+        except sqlite3.Error as error:
+            print("Error al insertar en Acciones: %s", error)
+            logging.error("Error al insertar en Acciones: %s", error)
+        finally:
+            print("Terminado el proceso BDD en Acciones.")
+
+    def cargar_componente(self, entrada_fecha, mercado, nombre, ticker, valor_compra, numAcciones) -> bool: 
+        logging.info("Dentro de método Cargar Componente.")
+        print("Dentro de método Cargar Componente.")
+        self.anadirComponente(entrada_fecha, mercado, nombre, ticker, numAcciones, valor_compra)
+
+        return True
 
     def ir_a_pantalla_dos(self, widget):
         self.main_window.content = self.construir_pantalla_dos()
