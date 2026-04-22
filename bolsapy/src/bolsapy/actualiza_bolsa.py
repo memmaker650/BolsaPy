@@ -34,35 +34,11 @@ class ActualizaBolsa:
     # -----------------------------
     # TICKERS
     # -----------------------------
-    TICKERS = {
-        "Repsol": "REP.MC",
-        "Wolters Kluwer": "WKL.AS",
-        "Apple": "AAPL",
-        "Telefónica": "TEF.MC", 
-        "Amadeus": "AMS.MC",
-        "Banco Santander": "SAN",
-        "Banco Sabadell": "SAB.MC",
-        "BBVA": "BBVA",
-        "OHLA": "OHLA.MC",
-        "Sacyr": "SCYR.MC",
-        "AENA": "AENA.MC",
-        "Acciona": "ANA.MC",
-        "Ferrovial": "FER",
-        "Atos": "ATO.PA",
-        "Alten": "ATE.PA",
-        "Sopra Steria": "SOP.PA",
-        "Indra": "IDR.MC",
-        "Amadeus": "AMS",
-        "Grifols": "GRF",
-        "Inditex (Zara)": "ITX.MC",
-        "Repsol": "REP.MC",
-        "YPF": "YPF",
-        "Endesa": "ELE.MC",
-        "Iberdrola": "IBE.MC",
-        "NIKE": "NKE",
-        "ADIDAS": "ADS.DE",
-        "ASICS": "7936.T",
-    }
+    TICKERS = {}
+
+
+    def __init__(self, progress_callback=None):
+        self.progress_callback = progress_callback
 
     # -----------------------------
     # OPERACIONES CON BDD
@@ -200,7 +176,7 @@ class ActualizaBolsa:
     # -----------------------------
     def descargaYCalculoTickers(self):
         resumen_rows = []
-
+        i = 1
         print(f"Mover datos antiguos para hacer hueco a los nuevos datos.")
         wb = load_workbook(self.SALIDA_XLSX)
         ws = wb["Resumen"]
@@ -293,6 +269,11 @@ class ActualizaBolsa:
                     else:
                         fecha = ''
                     noticia = f"{tit} ({pub}, {fecha})"
+
+                    # 👉 aquí notificas progreso
+                if self.progress_callback:
+                    self.progress_callback(i)
+                    i+=1
             except Exception:
                 pass
 

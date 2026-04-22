@@ -57,6 +57,7 @@ class BolsaPy(toga.App):
 
     valorCompraTotal = 0
     valorTotalActual = 0
+    total = 0
 
     TICKERS_BASE = {
         "Repsol": "REP.MC",
@@ -586,7 +587,7 @@ class BolsaPy(toga.App):
         boton_descarga = toga.Button(
             "Stocks Sync",
             on_press=self.ir_a_pantalla_recoleccionDatos,
-            style=Pack(margin=10,
+            style=Pack(height=80, margin=10,
             background_color="orange")
         )
 
@@ -797,10 +798,16 @@ class BolsaPy(toga.App):
     def ir_a_pantalla_tres(self, widget, valor=None):
         self.main_window.content = self.construir_pantalla_detalles()
 
-    def iniciar_tarea(self, widget):
-        self.add_background_task(self.tarea_larga)
-        notification.notify(title="Inicio", message="Fin Tareas", app_name="BikeCompFollowApp", app_icon="resources/bici2.icns")
+    async def iniciar_tarea(self, widget):
+        AB = actualiza_bolsa.ActualizaBolsa(
+            progress_callback=self.actualizar_progreso
+        )
+        AB.db_path = self.db_path
+        AB.TICKERS = self.TICKERS_BASE
 
+        await self.loop.run_in_executor(None, AB.lanzarAcciones)
+    
+    # Esta es una clase de prueba para testear la barra de progreso.
     async def tarea_larga(self, widget):
         for i in range(1, self.total + 1):
             await asyncio.sleep(0.3)   
@@ -812,8 +819,17 @@ class BolsaPy(toga.App):
     def ir_a_pantalla_recoleccionDatos(self, widget):
         self.main_window.content = self.barraProgresoCargaDatos()    
 
+    def actualizar_progreso(self, actual):
+        def update():
+            self.progress.max = self.total
+            self.progress.value = actual
+            self.label.text = f"Procesando {actual} de {self.total}"
+
+        self.app.loop.call_soon_threadsafe(update)
+
     def barraProgresoCargaDatos(self):    
-        self.total = 20
+        self.total = len(self.TICKERS_BASE)
+        print("Total Tickers a tratar es : ", self.total)
 
         # Texto de progreso
         self.label = toga.Label(
@@ -821,8 +837,6 @@ class BolsaPy(toga.App):
             style=Pack(margin=10)
         )
 
-        AB = actualiza_bolsa.ActualizaBolsa()
-        AB.db_path = self.db_path
         # Barra de progreso
         self.progress = toga.ProgressBar(max=self.total,
             value=0, style=Pack(margin=10))
@@ -834,10 +848,10 @@ class BolsaPy(toga.App):
         box.add(self.label)
         box.add(self.progress)
 
-        boton_iniciar = toga.Button("Iniciar", on_press=self.iniciar_tarea, style=Pack(margin=10))
-        box.add(boton_iniciar)
+        #boton_iniciar = toga.Button("Iniciar", on_press=self.iniciar_tarea, style=Pack(margin=10))
+        #box.add(boton_iniciar)
 
-        boton_datos = toga.Button("Extraer Datos Bolsa", on_press=AB.lanzarAcciones, style=Pack(margin=10))
+        boton_datos = toga.Button("Extraer Datos Bolsa", on_press=self.iniciar_tarea, style=Pack(margin=10))
         box.add(boton_datos)
         boton_valoracion = toga.Button("Calcular valoración Stocks", on_press=self.preparacion_ValuationConfig, style=Pack(margin=10))
         box.add(boton_valoracion)
