@@ -86,6 +86,8 @@ class BolsaPy(toga.App):
         "NIKE": "NKE",
         "ADIDAS": "ADS.DE",
         "ASICS": "7936.T",
+        "Johnson & Johnson": "JNJ",
+        "Procter & Gamble": "PG"
     }
 
     def startup(self):
@@ -257,7 +259,7 @@ class BolsaPy(toga.App):
 
                 # Botón que cambia el texto (ahora circular con símbolo '+')
                 boton = toga.Button(cadena, on_press=lambda widget, valor=cadena: self.ir_a_pantalla_tres(widget, valor),
-                style=Pack(width=140, height=60, padding=0))
+                style=Pack(width=140, height=60, margin=0))
                 fila_boton = toga.Box(style=Pack(direction=ROW))
                 fila_boton.add(toga.Box(style=Pack(flex=1)))
                 fila_boton.add(boton)
@@ -270,7 +272,7 @@ class BolsaPy(toga.App):
 
         # Barra inferior: botón izquierda, hueco en medio, botón derecha
         barra_inferior = toga.Box(
-            style=Pack(direction=ROW, alignment=CENTER, padding=5)
+            style=Pack(direction=ROW, alignment=CENTER, margin=5)
         )
 
         boton_descargar = toga.Button(
@@ -293,7 +295,7 @@ class BolsaPy(toga.App):
 
         boton_masinfo = toga.Button(
             "+ info",
-            on_press=self.ir_a_pantalla_tres,
+            on_press=self.ir_a_pantalla_infoTotalTickers,
             style=Pack(margin=10)
         )
 
@@ -625,12 +627,99 @@ class BolsaPy(toga.App):
     def ir_a_pantalla_info(self, widget):
         self.main_window.content = self.construir_pantalla_info()    
 
+    # -------- Pantalla info --------
+    def construir_pantalla_infoTotalTickers(self):
+        # =========================
+        # Header (Pantalla info)
+        # =========================
+        main_box = toga.Box(style=Pack(direction=COLUMN, margin=20, flex=1))
+        contenido_box = toga.Box(
+            style=Pack(direction=COLUMN, margin_left=40, align_items='start')
+        )
+
+        labelPantalla = toga.Label(
+            "Info General Lista Tickers.",
+            style=Pack(margin_bottom=20, text_align=CENTER)
+        )
+        label_pantalla_infoTickers = toga.Label(
+            "Datos de la TABLA Valores leídos correctamente.",
+            style=Pack(margin_bottom=20, text_align=CENTER)
+        )
+        dataTable = None
+        data = None
+
+        # acciones (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
+        try:
+            cursor = self.sqliteConnection.cursor()
+            cursor.execute("""SELECT id, nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno FROM valores""")
+            dataTable = cursor.fetchall()
+        except sqlite3.Error as error:
+            logging.error("Error en el SELECT de la TABLA Valores: %s", error)
+            print("Error en el SELECT de la TABLA Acciones: %s", error)
+        finally:
+            label_pantalla_infoTickers.style.color = rgb(0, 255, 0)
+            logging.info("Datos de TABLA Valores LEÍDOS correctamente.")
+            if dataTable is not None:
+                data = dataTable
+
+        data = list(data) if data is not None else []
+        # Altura según nº de filas (Toga no la calcula sola). Tope para listas largas → scroll dentro de la tabla.
+        _h_cabecera, _h_fila, _h_max = 28, 22, 520
+        _n = len(data)
+        _altura_tabla = _h_cabecera + max(_n, 1) * _h_fila
+        _altura_tabla = min(_altura_tabla, _h_max)
+
+        # Definir tabla con cabeceras
+        self.tabla = toga.Table(
+            headings=["id", "Nombre", "TICKER", "Valor actual", "Delta ayer", "Delta semana", "Máximo Anual", "Mínimo Anual"],
+            data=data,
+            style=Pack(height=_altura_tabla),
+        )
+
+        # Espaciador vertical para empujar la barra inferior hacia abajo
+        espaciador_vertical = toga.Box(style=Pack(flex=1))
+
+        # Barra inferior: botón izquierda, hueco en medio, botón derecha
+        barra_inferior = toga.Box(
+            style=Pack(direction=ROW)
+        )
+
+        boton_volver = toga.Button(
+            "◀ Volver",
+            on_press=self.volver_pantalla_inicial,
+            style=Pack(margin=10)
+        )
+
+        boton_anadirTicker = toga.Button(
+            "+ Ticker",
+            on_press=self.volver_pantalla_inicial,
+            style=Pack(margin=10)
+        )
+
+        espaciador_horizontal = toga.Box(style=Pack(flex=1))
+        contenido_box.add(labelPantalla)
+        contenido_box.add(label_pantalla_infoTickers)
+        contenido_box.add(self.tabla)
+        
+        barra_inferior.add(boton_volver)
+        barra_inferior.add(espaciador_horizontal)
+        barra_inferior.add(boton_anadirTicker)
+
+        main_box.add(contenido_box)
+        main_box.add(espaciador_vertical)
+        main_box.add(barra_inferior)
+
+        return main_box
+
+    def ir_a_pantalla_infoTotalTickers(self, widget):
+        self.main_window.content = self.construir_pantalla_infoTotalTickers()
+
     # -------- Pantalla 3 --------
     def construir_pantalla_detalles(self):
         main_box = toga.Box(style=Pack(direction=COLUMN, margin=20))
 
         contenido_box = toga.Box(
-            style=Pack(direction=COLUMN, padding_left=40, align_items='start', flex=1)
+            style=Pack(direction=COLUMN, margin_left=40, align_items='start', flex=1)
         )
 
         titulo = "User: "
@@ -646,10 +735,10 @@ class BolsaPy(toga.App):
         dataTable = None
         data = None
 
-        # archivoscomponentes (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
+        # acciones (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
         try:
             cursor = self.sqliteConnection.cursor()
-            cursor.execute("""SELECT id, nombre, ticker, Valor_compra, Tiempo_custodia,' ' FROM acciones""")
+            cursor.execute("""SELECT id, nombre, ticker, Num_acciones, Valor_compra, Tiempo_custodia,' ' FROM acciones""")
             dataTable = cursor.fetchall()
         except sqlite3.Error as error:
             logging.error("Error en el SELECT de la TABLA Comp: %s", error)
@@ -729,28 +818,28 @@ class BolsaPy(toga.App):
         # Texto de progreso
         self.label = toga.Label(
             "Pulsa Inicio para cargar los datos.",
-            style=Pack(padding=10)
+            style=Pack(margin=10)
         )
 
         AB = actualiza_bolsa.ActualizaBolsa()
         AB.db_path = self.db_path
         # Barra de progreso
         self.progress = toga.ProgressBar(max=self.total,
-            value=0, style=Pack(padding=10))
+            value=0, style=Pack(margin=10))
 
         # Botón para iniciar tarea
-        box = toga.Box(style=Pack(direction=COLUMN, padding=20))
+        box = toga.Box(style=Pack(direction=COLUMN, margin=20))
 
         # Añadimos los widgets al mismo box
         box.add(self.label)
         box.add(self.progress)
 
-        boton_iniciar = toga.Button("Iniciar", on_press=self.iniciar_tarea, style=Pack(padding=10))
+        boton_iniciar = toga.Button("Iniciar", on_press=self.iniciar_tarea, style=Pack(margin=10))
         box.add(boton_iniciar)
 
-        boton_datos = toga.Button("Extraer Datos Bolsa", on_press=AB.lanzarAcciones, style=Pack(padding=10))
+        boton_datos = toga.Button("Extraer Datos Bolsa", on_press=AB.lanzarAcciones, style=Pack(margin=10))
         box.add(boton_datos)
-        boton_valoracion = toga.Button("Calcular valoración Stocks", on_press=self.preparacion_ValuationConfig, style=Pack(padding=10))
+        boton_valoracion = toga.Button("Calcular valoración Stocks", on_press=self.preparacion_ValuationConfig, style=Pack(margin=10))
         box.add(boton_valoracion)
 
         # Barra inferior con botón a la izquierda (por defecto)
