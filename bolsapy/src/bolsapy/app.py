@@ -77,7 +77,6 @@ class BolsaPy(toga.App):
         "Alten": "ATE.PA",
         "Sopra Steria": "SOP.PA",
         "Indra": "IDR.MC",
-        "Amadeus": "AMS",
         "Grifols": "GRF",
         "Inditex (Zara)": "ITX.MC",
         "Repsol": "REP.MC",
@@ -115,6 +114,12 @@ class BolsaPy(toga.App):
         print("Inicio BolsaPy iOS App!!!")
 
         self.arrancarDB() # Arrancar BDD
+
+        self.crearTablaTickers()
+        self.guardarTickersBDD(self.TICKERS_BASE)
+
+        tickers = self.leerTickersBDD()
+        print(tickers)
 
         self.main_window.content = self.construir_pantalla_uno()
         self.main_window.show()
@@ -895,6 +900,54 @@ class BolsaPy(toga.App):
         ValC.db_path = self.db_path
         df = ValC.value_tickers(tickers)
         print(df)
+
+    def crearTablaTickers(self) -> bool:
+        try:
+            cursor = self.sqliteConnection.cursor()
+            cursor.execute("""CREATE TABLE IF NOT EXISTS tickers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT UNIQUE,
+            TICKER TEXT UNIQUE
+            )""")
+            self.sqliteConnection.commit()
+            return True
+        except sqlite3.Error as error:
+            logging.error("Error en el CREAR la TABLA tickers: %s", error)
+            print("Error en el CREAR la TABLA tickers: %s", error)
+            return False
+
+    def guardarTickersBDD(self, tickers_dict) -> bool:
+        try:
+            cursor = self.sqliteConnection.cursor()
+
+            for nombre, ticker in tickers_dict.items():
+                cursor.execute("""
+                    INSERT INTO tickers (nombre, ticker)
+                    VALUES (?, ?) ON CONFLICT(nombre) DO UPDATE SET ticker=excluded.ticker
+                """, (nombre, ticker))
+
+            self.sqliteConnection.commit()
+            return True
+
+        except sqlite3.Error as error:
+            logging.error("Error al guardar tickers: %s", error)
+            return False
+
+    def leerTickersBDD(self) -> dict:
+        try:
+            cursor = self.sqliteConnection.cursor()
+
+            cursor.execute("SELECT nombre, ticker FROM tickers")
+            rows = cursor.fetchall()
+
+            # reconstruir diccionario
+            tickers = {nombre: ticker for nombre, ticker in rows}
+
+            return tickers
+
+        except sqlite3.Error as error:
+            logging.error("Error al leer tickers: %s", error)
+            return {}
 
 def main():
     return BolsaPy("BolsaPy App", "com.SkullWithGasMask", icon="resources/icon.png")
