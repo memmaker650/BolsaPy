@@ -59,6 +59,8 @@ class BolsaPy(toga.App):
     valorTotalActual = 0
     total = 0
 
+    label_estado = ""
+
     TICKERS_BASE = {
         "Repsol": "REP.MC",
         "Wolters Kluwer": "WKL.AS",
@@ -698,7 +700,7 @@ class BolsaPy(toga.App):
 
         boton_anadirTicker = toga.Button(
             "+ Ticker",
-            on_press=self.volver_pantalla_inicial,
+            on_press=self.ir_a_pantalla_NuevoTicker,
             style=Pack(margin=10)
         )
 
@@ -900,6 +902,150 @@ class BolsaPy(toga.App):
         ValC.db_path = self.db_path
         df = ValC.value_tickers(tickers)
         print(df)
+    
+    # -------- Pantalla Nuevo Ticker --------
+    def construir_pantalla_nuevoTicker(self):
+        main_box = toga.Box(style=Pack(direction=COLUMN, margin=20))
+
+        contenido_box = toga.Box(
+            style=Pack(direction=COLUMN, margin_left=40, align_items='start')
+        )
+
+        tituloSreen5 = "Añadir Nuevo Ticker a la lista. " + self.label_estado
+
+        self.label_pantalla_dos = toga.Label(
+            tituloSreen5,
+            style=Pack(margin_bottom=20, text_align=CENTER)
+        )
+
+        contenido_box.add(self.label_pantalla_dos)
+
+        # Caja con dropdown "Elemento"
+        # mercado = []
+        # try:
+        #     cursor = self.sqliteConnection.cursor()
+        #     cursor.execute("SELECT nombre FROM Mercados ORDER BY nombre")
+        #     mercado = [row[0] for row in cursor.fetchall()]
+        # except sqlite3.Error as error:
+        #     logging.error("Error al leer tabla Mercados %s", error)
+
+        # # Si no hay datos en la tabla Elemento, usamos una lista por defecto
+        # if not mercado:
+        #     mercado = ["USA", "España", "Alemania", "Francia", "Japón", "UK"]
+
+        # caja_mercado = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
+
+        # label_mercado = toga.Label(
+        #     "Mercado : ",
+        #     style=Pack(margin_right=10)
+        # )
+
+        # self.seleccion_mercado = toga.Selection(
+        #     items=mercado,
+        #     style=Pack(width=250)
+        # )
+
+        # Caja con label "Descripción" a la izquierda y campo de texto a la derecha
+        caja_nombre = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
+
+        label_nombre = toga.Label(
+            "Nombre Compañía: ",
+            style=Pack(margin_right=10)
+        )
+
+        self.nombre_texto = toga.TextInput(
+            placeholder="Escribe nombre comp...",
+            style=Pack(width=250)
+        )
+
+        # Caja con label "Marca" a la izquierda y campo de texto a la derecha
+        caja_ticker = toga.Box(style=Pack(direction=ROW, margin_bottom=10, align_items=CENTER))
+
+        label_ticker = toga.Label(
+            "TICKER: ",
+            style=Pack(margin_right=10)
+        )
+
+        self.ticker_texto = toga.TextInput(
+            placeholder="TICKER si lo conoces...",
+            style=Pack(width=250)
+        )
+
+        boton_Cargar = toga.Button(
+            "Cargar",
+            on_press=self.on_cargar,
+            style=Pack(margin=10)
+        )
+
+        #caja_mercado.add(label_mercado)
+        #caja_mercado.add(self.seleccion_mercado)
+        caja_nombre.add(label_nombre)
+        caja_nombre.add(self.nombre_texto)
+        caja_ticker.add(label_ticker)
+        caja_ticker.add(self.ticker_texto)
+
+        contenido_box.add(caja_nombre)
+        contenido_box.add(caja_ticker)
+        
+        contenido_box.add(boton_Cargar)
+
+        # Espaciador vertical para empujar la barra inferior hacia abajo
+        espaciador_vertical = toga.Box(style=Pack(flex=1))
+
+        # Barra inferior con botón a la izquierda (por defecto)
+        barra_inferior = toga.Box(
+            style=Pack(direction=ROW)
+        )
+
+        boton_volver = toga.Button(
+            "◀ Volver",
+            on_press=self.ir_a_pantalla_infoTotalTickers,
+            style=Pack(margin=10)
+        )
+        barra_inferior.add(boton_volver)
+
+        main_box.add(contenido_box)
+        main_box.add(espaciador_vertical)
+        main_box.add(barra_inferior)
+
+        return main_box
+    
+    def ir_a_pantalla_NuevoTicker(self, widget):
+        self.main_window.content = self.construir_pantalla_nuevoTicker()
+
+    def existe_ticker(self, nombre, ticker) -> bool:
+        cursor = self.sqliteConnection.cursor()
+
+        cursor.execute("""
+            SELECT 1 FROM tickers 
+            WHERE nombre = ? AND ticker = ?
+        """, (nombre, ticker))
+
+        return cursor.fetchone() is not None
+
+    def nombre_con_otro_ticker(self, nombre, ticker) -> bool:
+        cursor = self.sqliteConnection.cursor()
+
+        cursor.execute("""
+            SELECT ticker FROM tickers 
+            WHERE nombre = ?
+        """, (nombre,))
+
+        row = cursor.fetchone()
+
+        return row is not None and row[0] != ticker
+
+    def ticker_con_otro_nombre(self, nombre, ticker) -> bool:
+        cursor = self.sqliteConnection.cursor()
+
+        cursor.execute("""
+            SELECT nombre FROM tickers 
+            WHERE ticker = ?
+        """, (ticker,))
+
+        row = cursor.fetchone()
+
+        return row is not None and row[0] != nombre    
 
     def crearTablaTickers(self) -> bool:
         try:
@@ -916,11 +1062,46 @@ class BolsaPy(toga.App):
             print("Error en el CREAR la TABLA tickers: %s", error)
             return False
 
+    def on_cargar(self, widget):
+        datos = {
+            (self.nombre_texto.value or "").strip():
+            (self.ticker_texto.value or "").strip()
+        }
+
+        ok = False
+
+        if self.existe_ticker(list(datos.keys())[0], list(datos.values())[0]):
+            self.label_estado = "✅"
+        elif self.nombre_con_otro_ticker(list(datos.keys())[0], list(datos.values())[0]):
+            self.label_estado = "⚠️ El nombre ya existe con otro ticker"
+        elif self.ticker_con_otro_nombre(list(datos.keys())[0], list(datos.values())[0]):
+            self.label_estado = "⚠️ El ticker ya existe con otro nombre"
+        else:
+            ok = self.guardarTickersBDD(datos)
+
+        if ok:
+            self.valor_estado = "✅"
+            self.label_pantalla_dos.text += self.valor_estado
+            # self.label_pantalla_dos.style.color = rgb(0, 180, 0)
+            print("Ticker guardado correctamente")
+            return
+        else:
+            self.valor_estado = "❌"
+            self.label_pantalla_dos.text += self.valor_estado
+            # self.label_pantalla_dos.style.color = rgb(220, 0, 0)
+            print("Error al guardar ticker")
+        
+        self.label_pantalla_dos.text += self.valor_estado
+    
     def guardarTickersBDD(self, tickers_dict) -> bool:
         try:
             cursor = self.sqliteConnection.cursor()
 
             for nombre, ticker in tickers_dict.items():
+                nombre = (nombre or "").strip()
+                ticker = (ticker or "").strip()
+                if not nombre or not ticker:
+                    continue
                 cursor.execute("""
                     INSERT INTO tickers (nombre, ticker)
                     VALUES (?, ?) ON CONFLICT(nombre) DO UPDATE SET ticker=excluded.ticker

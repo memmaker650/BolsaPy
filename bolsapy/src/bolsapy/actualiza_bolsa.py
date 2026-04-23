@@ -13,6 +13,8 @@ import pandas as pd
 import sqlite3
 from pathlib import Path
 
+import yfinance as yf
+
 
 class ActualizaBolsa:
     conn = None
@@ -334,6 +336,15 @@ class ActualizaBolsa:
             self.guardadoEnExcel()
         finally:
             self.cerrarBDD()
+
+    @staticmethod
+    def ticker_valido(ticker):
+        try:
+            t = yf.Ticker(ticker)
+            info = t.info
+            return "shortName" in info
+        except:
+            return False        
 
 def main():
     app = ActualizaBolsa()
