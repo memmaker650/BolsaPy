@@ -36,6 +36,14 @@ class ValuationConfig:
     conectorDB = None
     db_path = None
 
+    def __init__(self, x, y, z, a, b, progress_callback=None):
+        self.discount_rate = x
+        self.terminal_growth = y
+        self.dcf_years = z
+        self.override_sector_pe = a
+        self.neutrality_band = b
+        self.progress_callback = progress_callback
+
     def chequearBDD(self) -> bool:
         print("Ruta BDD: ", self.db_path)
         self.conectorDB = sqlite3.connect(self.db_path)
@@ -337,7 +345,13 @@ class ValuationConfig:
     
     def value_tickers(self, tickers: List[str], widget=None) -> pd.DataFrame:
         rows = []
+        i = 1
         for t in tickers:
+            # 👉 aquí notificas el progreso
+            #----------------------------------
+            if self.progress_callback:
+                self.progress_callback(i)
+
             data = self.get_company_data(t)
             eps = data["eps_ttm"]
             shares = data["shares_outstanding"]
@@ -405,8 +419,12 @@ class ValuationConfig:
                 dcf_val,
                 avg_val,
                 classification,
-                upside
-            )
+                upside)
+
+           
+            i+=1
+            
+                
         return pd.DataFrame(rows)
 
 # -----------------------------

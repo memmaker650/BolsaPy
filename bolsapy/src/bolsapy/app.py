@@ -123,7 +123,7 @@ class BolsaPy(toga.App):
         tickers = self.leerTickersBDD()
         print(tickers)
 
-        self.main_window.content = self.construir_pantalla_uno()
+        self.main_window.content = self.construir_pantalla_inicial()
         self.main_window.show()
 
     def chequearIntegrarDB(self):
@@ -181,10 +181,10 @@ class BolsaPy(toga.App):
         logging.info("The SQLite connection is closed")
 
     def volver_pantalla_inicial(self, widget):
-        self.main_window.content = self.construir_pantalla_uno()
+        self.main_window.content = self.construir_pantalla_inicial()
 
     # -------- Pantalla 1 --------
-    def construir_pantalla_uno(self):
+    def construir_pantalla_inicial(self):
         # =========================
         # Header (Pantalla 1)
         # =========================
@@ -296,7 +296,7 @@ class BolsaPy(toga.App):
 
         boton_acciones = toga.Button(
             "Acciones Pos.",
-            on_press=self.ir_a_pantalla_dos,
+            on_press=self.ir_a_pantalla_infoBolsaAccionesPersonales,
             style=Pack(margin=10,
             background_color="blue")
         )
@@ -326,14 +326,14 @@ class BolsaPy(toga.App):
         return main_box
 
     # -------- Pantalla 2 --------
-    def construir_pantalla_dos(self):
+    def construir_pantalla_formAccionesUser(self):
         main_box = toga.Box(style=Pack(direction=COLUMN, margin=20))
 
         contenido_box = toga.Box(
             style=Pack(direction=COLUMN, margin_left=40, align_items='start')
         )
-
-        tituloSreen5 = "Añadir Acción a la Bolsa Personal: X"
+        self.label_estado = ""
+        tituloSreen5 = "Añadir Acción a la Bolsa Personal: "+self.label_estado
 
         self.label_pantalla_dos = toga.Label(
             tituloSreen5,
@@ -472,7 +472,7 @@ class BolsaPy(toga.App):
 
         boton_volver = toga.Button(
             "◀ Volver",
-            on_press=self.volver_pantalla_inicial,
+            on_press=self.ir_a_pantalla_infoBolsaAccionesPersonales,
             style=Pack(margin=10)
         )
         barra_inferior.add(boton_volver)
@@ -515,8 +515,8 @@ class BolsaPy(toga.App):
                 (f, valor2.value, valor3.value, valor4.value, valor5, valor6)
             )
             self.sqliteConnection.commit()
-            self.label_pantalla_dos.text = "Acciones cargada correctamente."
-            self.label_pantalla_dos.style.color = rgb(0, 255, 0)
+            self.label_pantalla_formAccionesUser.text = "Acciones cargada correctamente."
+            self.label_pantalla_formAccionesUser.style.color = rgb(0, 255, 0)
             logging.info("Datos de Acciones cargados correctamente.")
         except sqlite3.Error as error:
             print("Error al insertar en Acciones: %s", error)
@@ -531,8 +531,8 @@ class BolsaPy(toga.App):
 
         return True
 
-    def ir_a_pantalla_dos(self, widget):
-        self.main_window.content = self.construir_pantalla_dos()
+    def ir_a_pantalla_formAccionesUser(self, widget):
+        self.main_window.content = self.construir_pantalla_formAccionesUser()
 
     # -------- Pantalla info --------
     def construir_pantalla_info(self):
@@ -600,7 +600,7 @@ class BolsaPy(toga.App):
 
         boton_acciones = toga.Button(
             "Acciones Pos.",
-            on_press=self.ir_a_pantalla_dos,
+            on_press=self.ir_a_pantalla_formAccionesUser,
             style=Pack(margin=10,
             background_color="blue")
         )
@@ -730,15 +730,15 @@ class BolsaPy(toga.App):
             style=Pack(direction=COLUMN, margin_left=40, align_items='start', flex=1)
         )
 
-        titulo = "User: "
+        titulo = "Acciones Usuario: "
         # self.usuarioSeleccionado = valor
 
-        self.label_pantalla_dos = toga.Label(
+        self.label_pantalla_detalles = toga.Label(
             titulo,
             style=Pack(margin_bottom=20, text_align=CENTER)
         )
 
-        contenido_box.add(self.label_pantalla_dos)
+        contenido_box.add(self.label_pantalla_detalles)
 
         dataTable = None
         data = None
@@ -748,13 +748,14 @@ class BolsaPy(toga.App):
             cursor = self.sqliteConnection.cursor()
             cursor.execute("""SELECT id, nombre, ticker, Num_acciones, Valor_compra, Tiempo_custodia,' ' FROM acciones""")
             dataTable = cursor.fetchall()
+            self.label_estado = "✅"
+            logging.info("Datos de TABLA LEÍDOS correctamente.")
         except sqlite3.Error as error:
+            self.label_estado = "❌"
             logging.error("Error en el SELECT de la TABLA Comp: %s", error)
             print("Error en el SELECT de la TABLA Acciones: %s", error)
         finally:
-            self.label_pantalla_dos.text = "Datos de la TABLA Acciones leídos  correctamente."
-            self.label_pantalla_dos.style.color = rgb(0, 255, 0)
-            logging.info("Datos de TABLA LEÍDOS correctamente.")
+            
             if dataTable is not None:
                 data = dataTable
 
@@ -828,6 +829,7 @@ class BolsaPy(toga.App):
 
     def actualizar_progreso(self, actual):
         def update():
+            print("Dentro de progreso de BarraDeProgresso.")
             self.progress.max = self.total
             self.progress.value = actual
             self.label.text = f"Procesando {actual} de {self.total}"
@@ -885,7 +887,7 @@ class BolsaPy(toga.App):
         # self.main_window.show()
         return box
 
-    def preparacion_ValuationConfig(self, widget=None):
+    async def preparacion_ValuationConfig(self, widget=None):
         override_pe = {
                 "MSFT": 30.0,
                 "AAPL": 28.0
@@ -894,13 +896,16 @@ class BolsaPy(toga.App):
 
         tickers = list(self.TICKERS_BASE.values())
 
-        ValC = valoracion_intrinseca.ValuationConfig(discount_rate=0.10,
-                                                    terminal_growth=0.02,
-                                                    dcf_years=5,
-                                                    override_sector_pe=override_pe,
-                                                    neutrality_band=0.10)
+        ValC = valoracion_intrinseca.ValuationConfig(0.10,
+                                                    0.02,
+                                                    5,
+                                                    override_pe,
+                                                    0.10, 
+                                                    progress_callback=self.actualizar_progreso)
         ValC.db_path = self.db_path
-        df = ValC.value_tickers(tickers)
+        # Ejecutar la valoración en un hilo para no bloquear el loop UI.
+        # Así los callbacks de progreso se pintan en cada iteración.
+        df = await asyncio.to_thread(ValC.value_tickers, tickers)
         print(df)
     
     # -------- Pantalla Nuevo Ticker --------
@@ -913,12 +918,12 @@ class BolsaPy(toga.App):
 
         tituloSreen5 = "Añadir Nuevo Ticker a la lista. " + self.label_estado
 
-        self.label_pantalla_dos = toga.Label(
+        self.label_pantalla_dnuevoTicker = toga.Label(
             tituloSreen5,
             style=Pack(margin_bottom=20, text_align=CENTER)
         )
 
-        contenido_box.add(self.label_pantalla_dos)
+        contenido_box.add(self.label_pantalla_nuevoTicker)
 
         # Caja con dropdown "Elemento"
         # mercado = []
@@ -1013,6 +1018,93 @@ class BolsaPy(toga.App):
     def ir_a_pantalla_NuevoTicker(self, widget):
         self.main_window.content = self.construir_pantalla_nuevoTicker()
 
+    # -------- Pantalla infoBolsaAccionesPersonales --------
+    def construir_pantalla_infoBolsaAccionesPersonales(self):
+        # =========================
+        # Header (Pantalla info)
+        # =========================
+        main_box = toga.Box(style=Pack(direction=COLUMN, margin=20, flex=1))
+        contenido_box = toga.Box(
+            style=Pack(direction=COLUMN, margin_left=40, align_items='start')
+        )
+
+        labelPantalla = toga.Label(
+            "Info General Lista Tickers.",
+            style=Pack(margin_bottom=20, text_align=CENTER)
+        )
+        label_pantalla_infoTickers = toga.Label(
+            "Datos de la TABLA Valores leídos correctamente.",
+            style=Pack(margin_bottom=20, text_align=CENTER)
+        )
+        dataTable = None
+        data = None
+
+        # acciones (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
+        try:
+            cursor = self.sqliteConnection.cursor()
+            cursor.execute("""SELECT id, nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno FROM valores""")
+            dataTable = cursor.fetchall()
+        except sqlite3.Error as error:
+            logging.error("Error en el SELECT de la TABLA Valores: %s", error)
+            print("Error en el SELECT de la TABLA Acciones: %s", error)
+        finally:
+            label_pantalla_infoTickers.style.color = rgb(0, 255, 0)
+            logging.info("Datos de TABLA Valores LEÍDOS correctamente.")
+            if dataTable is not None:
+                data = dataTable
+
+        data = list(data) if data is not None else []
+        # Altura según nº de filas (Toga no la calcula sola). Tope para listas largas → scroll dentro de la tabla.
+        _h_cabecera, _h_fila, _h_max = 28, 22, 520
+        _n = len(data)
+        _altura_tabla = _h_cabecera + max(_n, 1) * _h_fila
+        _altura_tabla = min(_altura_tabla, _h_max)
+
+        # Definir tabla con cabeceras
+        self.tabla = toga.Table(
+            headings=["id", "Nombre", "TICKER", "Valor actual", "Delta ayer", "Delta semana", "Máximo Anual", "Mínimo Anual"],
+            data=data,
+            style=Pack(height=_altura_tabla),
+        )
+
+        # Espaciador vertical para empujar la barra inferior hacia abajo
+        espaciador_vertical = toga.Box(style=Pack(flex=1))
+
+        # Barra inferior: botón izquierda, hueco en medio, botón derecha
+        barra_inferior = toga.Box(
+            style=Pack(direction=ROW)
+        )
+
+        boton_volver = toga.Button(
+            "◀ Volver",
+            on_press=self.volver_pantalla_inicial,
+            style=Pack(margin=10)
+        )
+
+        boton_anadirTicker = toga.Button(
+            "+ Acciones Perso",
+            on_press=self.ir_a_pantalla_formAccionesUser,
+            style=Pack(margin=10)
+        )
+
+        espaciador_horizontal = toga.Box(style=Pack(flex=1))
+        contenido_box.add(labelPantalla)
+        contenido_box.add(label_pantalla_infoTickers)
+        contenido_box.add(self.tabla)
+        
+        barra_inferior.add(boton_volver)
+        barra_inferior.add(espaciador_horizontal)
+        barra_inferior.add(boton_anadirTicker)
+
+        main_box.add(contenido_box)
+        main_box.add(espaciador_vertical)
+        main_box.add(barra_inferior)
+
+        return main_box
+
+    def ir_a_pantalla_infoBolsaAccionesPersonales(self, widget):
+        self.main_window.content = self.construir_pantalla_infoBolsaAccionesPersonales()
+
     def existe_ticker(self, nombre, ticker) -> bool:
         cursor = self.sqliteConnection.cursor()
 
@@ -1081,17 +1173,44 @@ class BolsaPy(toga.App):
 
         if ok:
             self.valor_estado = "✅"
-            self.label_pantalla_dos.text += self.valor_estado
-            # self.label_pantalla_dos.style.color = rgb(0, 180, 0)
+            self.label_pantalla_nuevoTicker.text += self.valor_estado
             print("Ticker guardado correctamente")
             return
         else:
             self.valor_estado = "❌"
-            self.label_pantalla_dos.text += self.valor_estado
-            # self.label_pantalla_dos.style.color = rgb(220, 0, 0)
+            self.label_pantalla_nuevoTicker.text += self.valor_estado
             print("Error al guardar ticker")
         
-        self.label_pantalla_dos.text += self.valor_estado
+        self.label_pantalla_nuevoTicker.text += self.valor_estado
+
+    def on_cargarValoracion(self, widget):
+        datos = {
+            (self.nombre_texto.value or "").strip():
+            (self.ticker_texto.value or "").strip()
+        }
+
+        ok = False
+
+        if self.existe_ticker(list(datos.keys())[0], list(datos.values())[0]):
+            self.label_estado = "✅"
+        elif self.nombre_con_otro_ticker(list(datos.keys())[0], list(datos.values())[0]):
+            self.label_estado = "⚠️ El nombre ya existe con otro ticker"
+        elif self.ticker_con_otro_nombre(list(datos.keys())[0], list(datos.values())[0]):
+            self.label_estado = "⚠️ El ticker ya existe con otro nombre"
+        else:
+            ok = self.guardarTickersBDD(datos)
+
+        if ok:
+            self.valor_estado = "✅"
+            self.label_pantalla_nuevoTicker.text += self.valor_estado
+            print("Ticker guardado correctamente")
+            return
+        else:
+            self.valor_estado = "❌"
+            self.label_pantalla_nuevoTicker.text += self.valor_estado
+            print("Error al guardar ticker")
+        
+        self.label_pantalla_nuevoTicker.text += self.valor_estado
     
     def guardarTickersBDD(self, tickers_dict) -> bool:
         try:

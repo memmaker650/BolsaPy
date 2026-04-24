@@ -272,7 +272,8 @@ class ActualizaBolsa:
                         fecha = ''
                     noticia = f"{tit} ({pub}, {fecha})"
 
-                    # 👉 aquí notificas progreso
+                    # 👉 aquí notificas el progreso
+                    #----------------------------------
                 if self.progress_callback:
                     self.progress_callback(i)
                     i+=1
