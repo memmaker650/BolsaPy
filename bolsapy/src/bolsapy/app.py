@@ -27,7 +27,6 @@ class AppPaths:
         """
         kind: data | cache
         """
-
         # 🟢 Caso 1: Toga (Briefcase dev / iOS / macOS app)
         if cls.app and hasattr(cls.app, "paths"):
             return getattr(cls.app.paths, kind)
@@ -60,6 +59,8 @@ class BolsaPy(toga.App):
     total = 0
 
     label_estado = ""
+    ruta_imagen = None
+    imagen_grafica = None
 
     TICKERS_BASE = {
         "Repsol": "REP.MC",
@@ -91,6 +92,22 @@ class BolsaPy(toga.App):
         "Johnson & Johnson": "JNJ",
         "Procter & Gamble": "PG"
     }
+
+    async def cargar_grafica(self, widget=None):
+        self.ruta_imagen = await self.loop.run_in_executor(
+            None,
+            actualiza_bolsa.generar_grafica_ticker,
+            "AAPL",
+            self.app.paths.data
+        )
+
+        # actualizar UI en hilo principal
+        if self.ruta_imagen:
+            self.imagen_grafica.image = toga.Image(str(self.ruta_imagen))
+            logging("Gráfica cargada")
+        else:
+            logging("❌ Error al generar gráfica")
+
 
     def startup(self):
         """Construct and show the Toga application.
@@ -182,6 +199,8 @@ class BolsaPy(toga.App):
 
     def volver_pantalla_inicial(self, widget):
         self.main_window.content = self.construir_pantalla_inicial()
+
+    
 
     # -------- Pantalla 1 --------
     def construir_pantalla_inicial(self):
@@ -774,6 +793,12 @@ class BolsaPy(toga.App):
         )
 
         contenido_box.add(self.tabla)
+
+        self.imagen_grafica = toga.ImageView(style=Pack(flex=1, margin=10))
+        contenido_box.add(self.imagen_grafica)
+
+        # 👇 lanzar tarea Generación Imagen Acción 3 meses en BACKGROUND
+        self.app.add_background_task(self.cargar_grafica)
 
         # Barra inferior con botón a la izquierda (por defecto)
         barra_inferior = toga.Box(

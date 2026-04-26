@@ -14,6 +14,29 @@ import sqlite3
 from pathlib import Path
 
 import yfinance as yf
+import matplotlib.pyplot as plt
+from pathlib import Path
+import matplotlib
+matplotlib.use("Agg")
+
+
+def generar_grafica_ticker(ticker, output_dir):
+    """Genera una gráfica de 3 meses y devuelve su ruta o None."""
+    data = yf.download(ticker, period="3mo")
+    if data.empty:
+        return None
+
+    plt.figure()
+    plt.plot(data.index, data["Close"])
+    plt.title(f"{ticker} - últimos 3 meses")
+    plt.xlabel("Fecha")
+    plt.ylabel("Precio")
+    plt.grid()
+
+    ruta = Path(output_dir) / f"{ticker}.png"
+    plt.savefig(ruta)
+    plt.close()
+    return ruta
 
 
 class ActualizaBolsa:
@@ -312,6 +335,14 @@ class ActualizaBolsa:
         # Construcción del DataFrame final
         self.resumen_df = pd.DataFrame(resumen_rows, columns=self.COLUMNAS)
         self.conn.commit()
+    
+    # Descargar datos para gráfico evolución Acción
+    @staticmethod
+    def generarGrafica(ticker, output_dir):
+        """
+        Wrapper para mantener compatibilidad y permitir llamada externa.
+        """
+        return generar_grafica_ticker(ticker, output_dir)
 
     def guardadoEnExcel(self):
         # Guardar Excel (una sola hoja "Resumen")
