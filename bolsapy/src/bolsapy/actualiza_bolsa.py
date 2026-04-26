@@ -14,6 +14,7 @@ import sqlite3
 from pathlib import Path
 
 import yfinance as yf
+import mplfinance as mpf
 import matplotlib.pyplot as plt
 from pathlib import Path
 import matplotlib
@@ -36,6 +37,44 @@ def generar_grafica_ticker(ticker, output_dir):
     ruta = Path(output_dir) / f"{ticker}.png"
     plt.savefig(ruta)
     plt.close()
+    return ruta
+
+def generar_velas_ticker(ticker, ruta_base):
+    data = yf.download(ticker, period="3mo", auto_adjust=False, progress=False)
+
+    if data.empty:
+        return None
+
+    # yfinance puede devolver MultiIndex o columnas no numéricas.
+    if isinstance(data.columns, pd.MultiIndex):
+        if ticker in data.columns.get_level_values(-1):
+            data = data.xs(ticker, axis=1, level=-1)
+        else:
+            data.columns = data.columns.get_level_values(0)
+
+    columnas_mpf = ["Open", "High", "Low", "Close", "Volume"]
+    if not set(columnas_mpf).issubset(set(data.columns)):
+        return None
+
+    data = data[columnas_mpf].copy()
+    for col in columnas_mpf:
+        data[col] = pd.to_numeric(data[col], errors="coerce")
+    data = data.dropna(subset=["Open", "High", "Low", "Close"])
+
+    if data.empty:
+        return None
+
+    ruta = Path(ruta_base) / f"{ticker}_velas.png"
+
+    mpf.plot(
+        data,
+        type='candle',          # 👈 velas japonesas
+        style='yahoo',          # estilo visual
+        title=f"{ticker} - 3 meses",
+        volume=True,            # volumen debajo
+        savefig=str(ruta)       # 👈 guardar imagen
+    )
+
     return ruta
 
 

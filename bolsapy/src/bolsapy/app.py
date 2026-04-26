@@ -104,9 +104,23 @@ class BolsaPy(toga.App):
         # actualizar UI en hilo principal
         if self.ruta_imagen:
             self.imagen_grafica.image = toga.Image(str(self.ruta_imagen))
-            logging("Gráfica cargada")
+            logging.info("Gráfica cargada")
         else:
-            logging("❌ Error al generar gráfica")
+            logging.error("❌ Error al generar gráfica")
+    
+    async def cargarGraficaVelas(self, widget=None):
+        ruta = await self.loop.run_in_executor(
+            None,
+            actualiza_bolsa.generar_velas_ticker,
+            "AAPL",
+            self.app.paths.data
+        )
+
+        if ruta:
+            self.imagenGraficaVelas.image = toga.Image(str(ruta))
+            logging.info("Velas cargadas")
+        else:
+            logging.error("❌ Error al generar gráfica de velas")
 
 
     def startup(self):
@@ -743,10 +757,11 @@ class BolsaPy(toga.App):
 
     # -------- Pantalla 3 --------
     def construir_pantalla_detalles(self):
-        main_box = toga.Box(style=Pack(direction=COLUMN, margin=20))
+        scroll = toga.ScrollContainer(style=Pack(flex=1))
+        main_box = toga.Box(style=Pack(direction=COLUMN, margin=20, flex=1))
 
         contenido_box = toga.Box(
-            style=Pack(direction=COLUMN, margin_left=40, align_items='start', flex=1)
+            style=Pack(direction=COLUMN, margin_left=40, align_items='start', padding_bottom=20)
         )
 
         titulo = "Acciones Usuario: "
@@ -794,11 +809,19 @@ class BolsaPy(toga.App):
 
         contenido_box.add(self.tabla)
 
-        self.imagen_grafica = toga.ImageView(style=Pack(flex=1, margin=10))
+        # En un ScrollContainer es mejor usar alto fijo que flex para forzar desbordamiento.
+        self.imagen_grafica = toga.ImageView(style=Pack(height=260, margin=10))
         contenido_box.add(self.imagen_grafica)
 
         # 👇 lanzar tarea Generación Imagen Acción 3 meses en BACKGROUND
         self.app.add_background_task(self.cargar_grafica)
+
+        # Cargar Gráfica de Velas
+        self.imagenGraficaVelas = toga.ImageView(style=Pack(height=320, margin=10))
+        contenido_box.add(self.imagenGraficaVelas)
+
+        # 👇 lanzar tarea Generación Imagen Acción 3 meses en BACKGROUND
+        self.app.add_background_task(self.cargarGraficaVelas)
 
         # Barra inferior con botón a la izquierda (por defecto)
         barra_inferior = toga.Box(
@@ -819,11 +842,13 @@ class BolsaPy(toga.App):
         #    style=Pack(margin=10)
         #)
 
+        scroll.content = contenido_box
+
         barra_inferior.add(boton_volver)
         barra_inferior.add(espaciador_horizontal)
         #barra_inferior.add(boton_nuevocomponente)
 
-        main_box.add(contenido_box)
+        main_box.add(scroll)
         main_box.add(barra_inferior)
 
         return main_box
