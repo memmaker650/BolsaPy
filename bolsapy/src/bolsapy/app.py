@@ -122,6 +122,70 @@ class BolsaPy(toga.App):
         else:
             logging.error("❌ Error al generar gráfica de velas")
 
+    def ordenar_tabla(self, col_index):
+        # En Toga, self.tabla.data devuelve objetos Row (no indexables con [i]).
+        # Conservamos una copia en formato tupla para poder ordenar por índice.
+        data = list(getattr(self, "_tabla_ordenable_data", []))
+        if not data:
+            # Si no tenemos base ordenable, no tocamos la tabla para evitar "vaciarla".
+            logging.warning("No hay datos base para ordenar la tabla.")
+            return
+    
+        # alternar asc/desc
+        if not hasattr(self, "orden_estado"):
+            self.orden_estado = {}
+    
+        reverse = self.orden_estado.get(col_index, False)
+    
+        # columnas numéricas
+        columnas_numericas = [0, 3, 4, 5, 6, 7]
+    
+        def convertir(valor):
+            if valor is None:
+                return 0
+    
+            if col_index in columnas_numericas:
+                try:
+                    # Limpia símbolos monetarios/% y soporta formatos 1.234,56 y 1,234.56
+                    texto = str(valor).strip().replace("%", "")
+                    texto = texto.replace("€", "").replace("$", "").replace(" ", "")
+                    if "." in texto and "," in texto:
+                        if texto.rfind(",") > texto.rfind("."):
+                            # formato europeo: 1.234,56
+                            texto = texto.replace(".", "").replace(",", ".")
+                        else:
+                            # formato anglosajón: 1,234.56
+                            texto = texto.replace(",", "")
+                    elif "," in texto:
+                        texto = texto.replace(",", ".")
+                    return float(texto)
+                except Exception:
+                    return 0
+            else:
+                return str(valor).lower()
+    
+        data.sort(key=lambda x: convertir(x[col_index]), reverse=reverse)
+    
+        # guardar estado (toggle)
+        self.orden_estado[col_index] = not reverse
+    
+        # refrescar tabla
+        self._tabla_ordenable_data = data
+        self.tabla.data = data
+        self._actualizar_indicadores_orden(col_index, reverse)
+
+    def _actualizar_indicadores_orden(self, col_index, reverse):
+        botones = getattr(self, "_botones_orden", {})
+        titulos = getattr(self, "_titulos_columnas_orden", {})
+        if not botones or not titulos:
+            return
+
+        for idx, boton in botones.items():
+            base = titulos.get(idx, boton.text)
+            if idx == col_index:
+                boton.text = f"{base} {'↓' if reverse else '↑'}"
+            else:
+                boton.text = base
 
     def startup(self):
         """Construct and show the Toga application.
@@ -704,6 +768,7 @@ class BolsaPy(toga.App):
                 data = dataTable
 
         data = list(data) if data is not None else []
+        self._tabla_ordenable_data = list(data)
         # Altura según nº de filas (Toga no la calcula sola). Tope para listas largas → scroll dentro de la tabla.
         _h_cabecera, _h_fila, _h_max = 28, 22, 520
         _n = len(data)
@@ -794,6 +859,8 @@ class BolsaPy(toga.App):
                 data = dataTable
 
         data = list(data) if data is not None else []
+        # Base ordenable para los botones de ordenación de esta tabla.
+        self._tabla_ordenable_data = list(data)
         # Altura según nº de filas (Toga no la calcula sola). Tope para listas largas → scroll dentro de la tabla.
         _h_cabecera, _h_fila, _h_max = 28, 22, 520
         _n = len(data)
@@ -1104,6 +1171,8 @@ class BolsaPy(toga.App):
                 data = dataTable
 
         data = list(data) if data is not None else []
+        self._tabla_ordenable_data = list(data)
+        self.orden_estado = {}
         # Altura según nº de filas (Toga no la calcula sola). Tope para listas largas → scroll dentro de la tabla.
         _h_cabecera, _h_fila, _h_max = 28, 22, 520
         _n = len(data)
@@ -1111,6 +1180,31 @@ class BolsaPy(toga.App):
         _altura_tabla = min(_altura_tabla, _h_max)
 
         # Definir tabla con cabeceras
+        cabecera_botones = toga.Box(style=Pack(direction=ROW, margin_bottom=5))
+
+        columnas = [
+            ("ID", 0),
+            ("Nombre", 1),
+            ("TICKER", 2),
+            ("Valor", 3),
+            ("Δ Ayer", 4),
+            ("Δ Semana", 5),
+            ("Max", 6),
+            ("Min", 7),
+        ]
+
+        self._botones_orden = {}
+        self._titulos_columnas_orden = {idx: texto for texto, idx in columnas}
+        for texto, idx in columnas:
+            btn = toga.Button(
+                texto,
+                on_press=lambda w, i=idx: self.ordenar_tabla(i),
+                style=Pack(flex=1, padding=2)
+            )
+            self._botones_orden[idx] = btn
+            cabecera_botones.add(btn)
+
+        contenido_box.add(cabecera_botones)
         self.tabla = toga.Table(
             headings=["id", "Nombre", "TICKER", "Valor actual", "Delta ayer", "Delta semana", "Máximo Anual", "Mínimo Anual"],
             data=data,
