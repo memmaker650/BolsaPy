@@ -14,6 +14,7 @@ from pathlib import Path
 
 import actualiza_bolsa
 import valoracion_intrinseca
+import tablaCustom
 
 class AppPaths:
     app = None
@@ -278,8 +279,6 @@ class BolsaPy(toga.App):
     def volver_pantalla_inicial(self, widget):
         self.main_window.content = self.construir_pantalla_inicial()
 
-    
-
     # -------- Pantalla 1 --------
     def construir_pantalla_inicial(self):
         # =========================
@@ -377,7 +376,7 @@ class BolsaPy(toga.App):
 
         # Barra inferior: botón izquierda, hueco en medio, botón derecha
         barra_inferior = toga.Box(
-            style=Pack(direction=ROW, alignment=CENTER, margin=5)
+            style=Pack(direction=ROW, align_items=CENTER, margin=5)
         )
 
         boton_descargar = toga.Button(
@@ -756,7 +755,7 @@ class BolsaPy(toga.App):
         # acciones (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
         try:
             cursor = self.sqliteConnection.cursor()
-            cursor.execute("""SELECT id, nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno FROM valores""")
+            cursor.execute("""SELECT nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno FROM valores""")
             dataTable = cursor.fetchall()
         except sqlite3.Error as error:
             logging.error("Error en el SELECT de la TABLA Valores: %s", error)
@@ -777,7 +776,7 @@ class BolsaPy(toga.App):
 
         # Definir tabla con cabeceras
         self.tabla = toga.Table(
-            headings=["id", "Nombre", "TICKER", "Valor actual", "Delta ayer", "Delta semana", "Máximo Anual", "Mínimo Anual"],
+            headings=["Nombre", "TICKER", "Valor actual", "Delta ayer", "Delta semana", "Máx Anual", "Mín Anual"],
             data=data,
             style=Pack(height=_altura_tabla),
         )
@@ -826,7 +825,7 @@ class BolsaPy(toga.App):
         main_box = toga.Box(style=Pack(direction=COLUMN, margin=20, flex=1))
 
         contenido_box = toga.Box(
-            style=Pack(direction=COLUMN, margin_left=40, align_items='start', padding_bottom=20)
+            style=Pack(direction=COLUMN, margin_left=40, align_items='start', margin_bottom=20)
         )
 
         titulo = "Acciones Usuario: "
@@ -845,7 +844,7 @@ class BolsaPy(toga.App):
         # acciones (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
         try:
             cursor = self.sqliteConnection.cursor()
-            cursor.execute("""SELECT id, nombre, ticker, Num_acciones, Valor_compra, Tiempo_custodia,' ' FROM acciones""")
+            cursor.execute("""SELECT nombre, ticker, Num_acciones, Valor_compra, Tiempo_custodia,' ' FROM acciones""")
             dataTable = cursor.fetchall()
             self.label_estado = "✅"
             logging.info("Datos de TABLA LEÍDOS correctamente.")
@@ -869,7 +868,7 @@ class BolsaPy(toga.App):
 
         # Definir tabla con cabeceras
         self.tabla = toga.Table(
-            headings=["id", "Nombre", "TICKER", "Num Acciones", "Valor compra", "Tiempo Custodia", "Valor actual"],
+            headings=["Nombre", "TICKER", "Num Acciones", "Valor compra", "Tiempo Custodia", "Valor actual"],
             data=data,
             style=Pack(height=_altura_tabla),
         )
@@ -1142,7 +1141,7 @@ class BolsaPy(toga.App):
         # =========================
         main_box = toga.Box(style=Pack(direction=COLUMN, margin=20, flex=1))
         contenido_box = toga.Box(
-            style=Pack(direction=COLUMN, margin_left=40, align_items='start')
+            style=Pack(direction=COLUMN, margin_left=5, align_items='start')
         )
 
         labelPantalla = toga.Label(
@@ -1159,7 +1158,7 @@ class BolsaPy(toga.App):
         # acciones (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
         try:
             cursor = self.sqliteConnection.cursor()
-            cursor.execute("""SELECT id, nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno FROM valores""")
+            cursor.execute("""SELECT nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno FROM valores""")
             dataTable = cursor.fetchall()
         except sqlite3.Error as error:
             logging.error("Error en el SELECT de la TABLA Valores: %s", error)
@@ -1170,46 +1169,20 @@ class BolsaPy(toga.App):
             if dataTable is not None:
                 data = dataTable
 
-        data = list(data) if data is not None else []
-        self._tabla_ordenable_data = list(data)
-        self.orden_estado = {}
-        # Altura según nº de filas (Toga no la calcula sola). Tope para listas largas → scroll dentro de la tabla.
-        _h_cabecera, _h_fila, _h_max = 28, 22, 520
-        _n = len(data)
-        _altura_tabla = _h_cabecera + max(_n, 1) * _h_fila
-        _altura_tabla = min(_altura_tabla, _h_max)
-
-        # Definir tabla con cabeceras
-        cabecera_botones = toga.Box(style=Pack(direction=ROW, margin_bottom=5))
-
-        columnas = [
-            ("ID", 0),
-            ("Nombre", 1),
-            ("TICKER", 2),
-            ("Valor", 3),
-            ("Δ Ayer", 4),
-            ("Δ Semana", 5),
-            ("Max", 6),
-            ("Min", 7),
+        data_dict = [
+            {
+                "nombre": d[0],
+                "ticker": d[1],
+                "valor": d[2],
+                "delta_ayer": d[3],
+                "delta_semana": d[4],
+                "min_año": d[6],
+                "max_año": d[5],
+            }
+            for d in data
         ]
 
-        self._botones_orden = {}
-        self._titulos_columnas_orden = {idx: texto for texto, idx in columnas}
-        for texto, idx in columnas:
-            btn = toga.Button(
-                texto,
-                on_press=lambda w, i=idx: self.ordenar_tabla(i),
-                style=Pack(flex=1, padding=2)
-            )
-            self._botones_orden[idx] = btn
-            cabecera_botones.add(btn)
-
-        contenido_box.add(cabecera_botones)
-        self.tabla = toga.Table(
-            headings=["id", "Nombre", "TICKER", "Valor actual", "Delta ayer", "Delta semana", "Máximo Anual", "Mínimo Anual"],
-            data=data,
-            style=Pack(height=_altura_tabla),
-        )
+        self.tabla = tablaCustom.TablaCustom(data_dict)
 
         # Espaciador vertical para empujar la barra inferior hacia abajo
         espaciador_vertical = toga.Box(style=Pack(flex=1))
