@@ -415,7 +415,50 @@ class ActualizaBolsa:
             info = t.info
             return "shortName" in info
         except:
-            return False        
+            return False
+
+    @staticmethod        
+    def info_dividendos(ticker):
+        accion = yf.Ticker(ticker)
+
+        # Historial de dividendos
+        divs = accion.dividends
+
+        if divs.empty:
+            return {
+                "paga_dividendos": False
+            }
+
+        # Convertir a DataFrame
+        df = divs.to_frame(name="dividendo")
+        df.index = pd.to_datetime(df.index)
+
+        # Últimos 3 años
+        hoy = datetime.now()
+        df = df[df.index.year >= hoy.year - 3]
+
+        # Frecuencia (aprox)
+        frecuencia = df.resample("YE").count().mean().iloc[0]
+
+        # Fechas recientes
+        ultimos_pagos = df.tail(4).index.strftime("%Y-%m-%d").tolist()
+
+        # Dividendos últimos 12 meses
+        ult_12m = df[df.index >= (hoy.replace(year=hoy.year - 1))]["dividendo"].sum()
+
+        # Precio actual
+        precio = accion.fast_info["last_price"]
+
+        # Yield estimado
+        dividend_yield = (ult_12m / precio) * 100 if precio else 0
+
+        return {
+            "paga_dividendos": True,
+            "frecuencia_anual_aprox": round(frecuencia, 1),
+            "ultimos_pagos": ultimos_pagos,
+            "dividendo_12m": round(ult_12m, 2),
+            "yield_estimado_%": round(dividend_yield, 2)
+        }       
 
 def main():
     app = ActualizaBolsa()
