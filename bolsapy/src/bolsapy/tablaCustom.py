@@ -6,11 +6,24 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
     sort_col = None
     sort_reverse = False
     header_box = None
+    selected_item = None
 
-    def __init__(self, datos):
-        super().__init__(style=Pack(direction=COLUMN, flex=1))  # 👈 ahora sí funciona
+    cols = {
+        "nombre": 2,
+        "ticker": 1,
+        "valor": 1,
+        "delta_ayer": 1,
+        "delta_semana": 1,
+        "min_año": 1,
+        "max_año": 1,
+    }
 
+    def __init__(self, datos, on_row_click=None):
+        super().__init__(style=Pack(direction=COLUMN, flex=1))
+
+        self.selected_item = None
         self.datos = datos
+        self.on_row_click = on_row_click  # 👈 ahora sí existe
         self.header_buttons = {}
 
         self.header_box = self._crear_cabecera()
@@ -50,10 +63,11 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
                 icono = " ▲" if not self.sort_reverse else " ▼"
             else:
                 icono = ""
+
             btn = toga.Button(
                 titulo + icono,
                 on_press=lambda widget, c=clave: self._ordenar_por(c),
-                style=Pack(flex=1)
+                style=Pack(flex=self.cols[clave])
             )
             self.header_buttons[clave] = btn
             fila.add(btn)
@@ -155,19 +169,47 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
     # -------------------------
     # Crear fila
     # -------------------------
-    def _crear_fila(self, item):
-        fila = toga.Box(style=Pack(direction=ROW, margin_top=2, margin_bottom=2, margin_left=5, margin_right=5, align_items="center"))
 
-        fila.add(toga.Label(self._texto_dos_lineas(item["nombre"]), style=Pack(flex=1, margin_left=4)))
-        fila.add(toga.Label(item["ticker"], style=Pack(flex=1, text_align="center", margin_left=2, margin_right=2)))
-        fila.add(toga.Label(str(item["valor"]), style=Pack(flex=1, text_align="center", margin_left=2, margin_right=2)))
+    def _celda_nombre_clickable(self, item):
+
+        def click(widget):
+            self.selected_item = item
+            self._refrescar_tabla()
+
+            if self.on_row_click:
+                self.on_row_click(item)
+
+        btn = toga.Button(
+            item["nombre"],
+            on_press=click,
+            style=Pack(flex=self.cols["nombre"])
+        )
+
+        # estilo tipo label
+        btn.style.update(background_color="transparent")
+
+        return btn
+
+    def _crear_fila(self, item):
+
+        is_selected = item == self.selected_item
+        fila = toga.Box(style=Pack(direction=ROW, margin=5))
+
+        if is_selected:
+            fila.style.update(background_color="#dff0d8")
+
+        # 👇 SOLO el nombre es clickable
+        fila.add(self._celda_nombre_clickable(item))
+
+        # resto solo labels
+        fila.add(toga.Label(item["ticker"], style=Pack(flex=self.cols["ticker"])))
+        fila.add(toga.Label(str(item["valor"]), style=Pack(flex=self.cols["valor"])))
 
         fila.add(self._celda_delta(item["delta_ayer"]))
         fila.add(self._celda_delta(item["delta_semana"]))
 
-        # Orden igual que cabecera: Máx Anual y luego Mín Anual
-        fila.add(toga.Label(item["min_año"], style=Pack(flex=1, text_align="right", margin_right=4)))
-        fila.add(toga.Label(item["max_año"], style=Pack(flex=1, text_align="right", margin_right=4)))
+        fila.add(toga.Label(item["min_año"], style=Pack(flex=self.cols["min_año"])))
+        fila.add(toga.Label(item["max_año"], style=Pack(flex=self.cols["max_año"])))
 
         return fila
 

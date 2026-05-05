@@ -279,6 +279,17 @@ class BolsaPy(toga.App):
     def volver_pantalla_inicial(self, widget):
         self.main_window.content = self.construir_pantalla_inicial()
 
+    def abrir_detalle(self, item):
+        print("Dentro CALLBACK Tabla info Detalles Ticker")
+
+        pantalla = self.construir_pantalla_detalleProfundoTicker(item["ticker"])
+
+        if pantalla is None:
+            print("ERROR: la pantalla devuelve None")
+            return
+
+        self.main_window.content = pantalla
+
     # -------- Pantalla 1 --------
     def construir_pantalla_inicial(self):
         # =========================
@@ -740,7 +751,14 @@ class BolsaPy(toga.App):
         contenido_box = toga.Box(
             style=Pack(direction=COLUMN, margin_left=40, align_items='start')
         )
-
+        semaforo_estado = "amarillo"  # "rojo" | "amarillo" | "verde"
+        semaforo_label = toga.Label(
+            "●",
+            style=Pack(
+                color=self.semaforo_a_rgb(semaforo_estado),
+                font_size=24,
+            ),
+        )
         labelPantalla = toga.Label(
             "Info General Lista Tickers.",
             style=Pack(margin_bottom=20, text_align=CENTER)
@@ -1182,7 +1200,10 @@ class BolsaPy(toga.App):
             for d in data
         ]
 
-        self.tabla = tablaCustom.TablaCustom(data_dict)
+        self.tabla = tablaCustom.TablaCustom(
+            data_dict,
+            on_row_click=self.abrir_detalle   # 👈 AQUÍ está la conexión REAL
+        )   
 
         # Espaciador vertical para empujar la barra inferior hacia abajo
         espaciador_vertical = toga.Box(style=Pack(flex=1))
@@ -1221,6 +1242,67 @@ class BolsaPy(toga.App):
 
     def ir_a_pantalla_infoBolsaAccionesPersonales(self, widget):
         self.main_window.content = self.construir_pantalla_infoBolsaAccionesPersonales()
+
+    # -------- Pantalla Info Detallada Ticker --------
+    def construir_pantalla_detalleProfundoTicker(self, item):
+        # ===========================================================================
+        # Header (Pantalla Detalles Profundo Ticker con Dividendos)
+        # ===========================================================================
+        main_box = toga.Box(style=Pack(direction=COLUMN, margin=20, flex=1))
+        contenido_box = toga.Box(
+            style=Pack(direction=COLUMN, margin_left=40, alignment=LEFT)
+        )
+
+        semaforo_estado = "amarillo"  # "rojo" | "amarillo" | "verde"
+
+        caja_titulo = toga.Box(
+            style=Pack(direction=ROW, align_items=CENTER)
+        )
+        # Texto inicial encima del botón
+        self.label = toga.Label(
+            "Detalle Profundo Ticker: "+item,
+            style=Pack(margin_bottom=20, text_align=CENTER)
+        )
+        semaforo_label = toga.Label(
+            "●",
+            style=Pack(
+                color=self.semaforo_a_rgb(semaforo_estado),
+                font_size=24,
+            ),
+        )
+
+        caja_titulo.add(self.label)
+
+        caja_titulo.add(semaforo_label)
+        contenido_box.add(caja_titulo)
+
+        # Espaciador vertical para empujar la barra inferior hacia abajo
+        espaciador_vertical = toga.Box(style=Pack(flex=1))
+
+        # Barra inferior: botón izquierda, hueco en medio, botón derecha
+        barra_inferior = toga.Box(
+            style=Pack(direction=ROW, align_items=CENTER, margin=5)
+        )
+
+        boton_volver = toga.Button(
+            "◀ Volver",
+            on_press=self.volver_pantalla_inicial,
+            style=Pack(margin=10)
+        )
+
+        espaciador_horizontal = toga.Box(style=Pack(flex=1))
+        
+        barra_inferior.add(boton_volver)
+        barra_inferior.add(espaciador_horizontal)
+
+        main_box.add(contenido_box)
+        main_box.add(espaciador_vertical)
+        main_box.add(barra_inferior)
+
+        return main_box    
+
+    def PantallaDetalle(self, item):
+        self.main_window.content = self.construir_pantalla_detalleProfundoTicker(item["ticker"])
 
     def existe_ticker(self, nombre, ticker) -> bool:
         cursor = self.sqliteConnection.cursor()
