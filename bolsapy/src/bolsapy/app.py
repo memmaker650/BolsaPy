@@ -65,14 +65,16 @@ class BolsaPy(toga.App):
     imagen_grafica = None
 
     TICKERS_BASE = {
-        "Repsol": "REP.MC",
-        "Wolters Kluwer": "WKL.AS",
+        "Microsoft": "MSFT",
+        "Google": "GOOGL",
+        "Oracle": "ORCL",
         "Apple": "AAPL",
         "Telefónica": "TEF.MC", 
         "Amadeus": "AMS.MC",
         "Banco Santander": "SAN",
         "Banco Sabadell": "SAB.MC",
         "BBVA": "BBVA",
+        "ACS": "ACS.MC",
         "OHLA": "OHLA.MC",
         "Sacyr": "SCYR.MC",
         "AENA": "AENA.MC",
@@ -80,9 +82,14 @@ class BolsaPy(toga.App):
         "Ferrovial": "FER",
         "Atos": "ATO.PA",
         "Alten": "ATE.PA",
+        "Wolters Kluwer": "WKL.AS",
         "Sopra Steria": "SOP.PA",
+        "Airbus": "AIR.PA",
         "Indra": "IDR.MC",
-        "Grifols": "GRF",
+        "Grifols": "GRF.MC",
+        "PharmaMar": "PHM.MC",
+        "Almirall": "ALM.MC",
+        "Rovi": "ROVI.MC",
         "Inditex (Zara)": "ITX.MC",
         "Repsol": "REP.MC",
         "YPF": "YPF",
@@ -123,6 +130,26 @@ class BolsaPy(toga.App):
             logging.info("Velas cargadas")
         else:
             logging.error("❌ Error al generar gráfica de velas")
+
+    def buscarNombrePorTicker(self, ticker_buscar) -> str:
+
+        nombre = next(
+            (nombre for nombre, ticker in self.TICKERS_BASE.items() if ticker == ticker_buscar),
+            None
+        )
+        print(nombre)
+
+        return nombre
+
+    def buscarTickerPorNombre(self, nombre_buscar) -> str:
+
+        tickr = next(
+            (tickr for nombre, ticker in self.TICKERS_BASE.items() if ticker == nombre_buscar),
+            None
+        )
+        print(tickr)
+
+        return tickr
 
     def ordenar_tabla(self, col_index):
         # En Toga, self.tabla.data devuelve objetos Row (no indexables con [i]).
@@ -964,11 +991,14 @@ class BolsaPy(toga.App):
 
     def actualizar_progreso(self, actual):
         def update():
-            print("Dentro de progreso de BarraDeProgresso.")
             self.progress.max = self.total
             self.progress.value = actual
-            self.label.text = f"Procesando {actual} de {self.total}"
-
+            if actual == self.total:
+                self.label.text = f"Procesando {actual} de {self.total} --> FIN"
+                self.label.style.color = rgb(0, 255, 0)
+            else:
+                self.label.text = f"Procesando {actual} de {self.total}"
+            
         self.app.loop.call_soon_threadsafe(update)
 
     def barraProgresoCargaDatos(self):    
@@ -1215,7 +1245,6 @@ class BolsaPy(toga.App):
                     label_pantalla_infoTickers.style.update(
                         color=rgb(255, 255, 0)
                     )
-                    print("Dentro")
                 print("Fecha máxima:", max_fecha)
 
             logging.info("Datos de TABLA Valores LEÍDOS correctamente.")
@@ -1310,8 +1339,12 @@ class BolsaPy(toga.App):
         )
         # Texto inicial encima del botón
         self.label = toga.Label(
-            "Detalle Profundo Ticker: " + item,
-            style=Pack(text_align=CENTER)
+            "Detalle Profundo Ticker: ",
+            style=Pack(text_align=CENTER, font_size=18)
+        )
+        self.label_info = toga.Label(
+            self.buscarNombrePorTicker(item) + " " +item,
+            style=Pack(text_align=CENTER, font_size=18, color=rgb(0,255,0))
         )
         semaforo_label = toga.Label(
             "●",
@@ -1322,11 +1355,101 @@ class BolsaPy(toga.App):
             ),
         )
 
-        caja_titulo.add(self.label)
+        table_box = toga.Box(
+            style=Pack(direction=COLUMN, margin=10)
+        )
 
+        fila_titulo = toga.Box(
+            style=Pack(direction=ROW)
+        )
+
+        titulo = toga.Label(
+            self.buscarNombrePorTicker(item) + " " +item,
+            style=Pack(
+                flex=1,
+                text_align=CENTER,
+                background_color="lightgray",
+                color=rgb(0, 0, 0),
+                font_weight="bold"
+            )
+        )
+
+        # Buscar la info de Dividendos
+        resultadoDVD = actualiza_bolsa.ActualizaBolsa.info_dividendos(item)
+
+        fila_titulo.add(titulo)
+
+        fila1 = toga.Box(style=Pack(direction=ROW))
+
+        fila1.add(toga.Label(self.buscarNombrePorTicker(item), style=Pack(width=150)))
+        fila1.add(toga.Label(item, style=Pack(width=100)))
+        fila1.add(toga.Label("210.35", style=Pack(width=100)))
+
+        titulo2 = toga.Label(
+            "INFO ACCIÓN :",
+            style=Pack(
+                flex=1,
+                text_align=CENTER,
+                background_color="lightblue",
+                color=rgb(0, 0, 0),
+                font_weight="bold"
+            )
+        )
+
+        fila_CabAccion = toga.Box(style=Pack(direction=ROW))
+
+        fila_CabAccion.add(toga.Label("Apple", style=Pack(width=150)))
+        fila_CabAccion.add(toga.Label("AAPL", style=Pack(width=100)))
+        fila_CabAccion.add(toga.Label("210.35", style=Pack(width=100)))
+
+        filaAccion = toga.Box(style=Pack(direction=ROW))
+
+        filaAccion.add(toga.Label("Apple", style=Pack(width=150)))
+        filaAccion.add(toga.Label("AAPL", style=Pack(width=100)))
+        filaAccion.add(toga.Label("210.35", style=Pack(width=100)))
+
+        tituloDVD = toga.Label(
+            "INFO DIVIDENDO :",
+            style=Pack(
+                flex=1,
+                text_align=CENTER,
+                background_color="lightgreen",
+                color=rgb(0, 0, 0),
+                font_weight="bold"
+            )
+        )
+        fila_Cab2 = toga.Box(style=Pack(direction=ROW))
+
+        fila_Cab2.add(toga.Label("Dividendos?", style=Pack(width=150)))
+        fila_Cab2.add(toga.Label("Veces/Año", style=Pack(width=100)))
+        fila_Cab2.add(toga.Label("Dividendo 12M", style=Pack(width=100)))
+        fila_Cab2.add(toga.Label("Rendimiento Estimado", style=Pack(width=100)))
+
+        fila2 = toga.Box(style=Pack(direction=ROW))
+
+        if resultadoDVD["paga_dividendos"]:
+            labelPagaDividendos = "Sí"
+        else:
+            labelPagaDividendos = "No"
+
+        fila2.add(toga.Label(labelPagaDividendos, style=Pack(width=150)))
+        fila2.add(toga.Label(resultadoDVD["frecuencia_anual_aprox"], style=Pack(width=100)))
+        fila2.add(toga.Label(resultadoDVD["dividendo_12m"], style=Pack(width=100)))
+        fila2.add(toga.Label(str(resultadoDVD["yield_estimado_%"])+"%", style=Pack(width=100)))
+
+        table_box.add(fila_titulo)
+        table_box.add(fila1)
+        table_box.add(titulo2)
+        table_box.add(filaAccion)
+        table_box.add(tituloDVD)
+        table_box.add(fila_Cab2)
+        table_box.add(fila2)
+
+        caja_titulo.add(self.label)
+        caja_titulo.add(self.label_info)
         caja_titulo.add(semaforo_label)
         contenido_box.add(caja_titulo)
-
+        
         # Espaciador vertical para empujar la barra inferior hacia abajo
         espaciador_vertical = toga.Box(style=Pack(flex=1))
 
@@ -1337,7 +1460,7 @@ class BolsaPy(toga.App):
 
         boton_volver = toga.Button(
             "◀ Volver",
-            on_press=self.volver_pantalla_inicial,
+            on_press=self.ir_a_pantalla_infoTotalTickers,
             style=Pack(margin=10)
         )
 
@@ -1347,6 +1470,7 @@ class BolsaPy(toga.App):
         barra_inferior.add(espaciador_horizontal)
 
         main_box.add(contenido_box)
+        main_box.add(table_box)
         main_box.add(espaciador_vertical)
         main_box.add(barra_inferior)
 

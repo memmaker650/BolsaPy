@@ -409,7 +409,7 @@ class ActualizaBolsa:
             self.cerrarBDD()
 
     @staticmethod
-    def ticker_valido(ticker):
+    def ticker_valido(self, ticker):
         try:
             t = yf.Ticker(ticker)
             info = t.info
@@ -444,7 +444,11 @@ class ActualizaBolsa:
         ultimos_pagos = df.tail(4).index.strftime("%Y-%m-%d").tolist()
 
         # Dividendos últimos 12 meses
-        ult_12m = df[df.index >= (hoy.replace(year=hoy.year - 1))]["dividendo"].sum()
+        hoy = pd.Timestamp.now(tz="Europe/Amsterdam")
+
+        fecha_inicio = hoy - pd.DateOffset(years=1)
+
+        ult_12m = df[df.index >= fecha_inicio]["dividendo"].sum()
 
         # Precio actual
         precio = accion.fast_info["last_price"]
