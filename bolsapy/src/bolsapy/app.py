@@ -11,6 +11,7 @@ from toga.colors import rgb
 from plyer import notification
 import asyncio
 from pathlib import Path
+from datetime import date
 
 import actualiza_bolsa
 import valoracion_intrinseca
@@ -1159,30 +1160,77 @@ class BolsaPy(toga.App):
         # =========================
         main_box = toga.Box(style=Pack(direction=COLUMN, margin=20, flex=1))
         contenido_box = toga.Box(
-            style=Pack(direction=COLUMN, margin_left=5, align_items='start')
+            style=Pack(direction=COLUMN, margin_left=5, align_items=CENTER, flex=1)
         )
 
         labelPantalla = toga.Label(
-            "Info General Lista Tickers.",
-            style=Pack(margin_bottom=20, text_align=CENTER)
+            "Info General Lista Tickers:",
+            style=Pack(text_align=CENTER, font_size=18)
         )
         label_pantalla_infoTickers = toga.Label(
             "Datos de la TABLA Valores leídos correctamente.",
-            style=Pack(margin_bottom=20, text_align=CENTER)
+            style=Pack(margin_bottom=20, text_align=CENTER, color=rgb(255, 255, 255) ) # color inicial explícito)
         )
+
+        semaforo_estado = "amarillo"  # "rojo" | "amarillo" | "verde"
+
+        caja_titulo = toga.Box(
+            style=Pack(direction=ROW, align_items=CENTER)
+        )
+
+        semaforo_label = toga.Label(
+            "●",
+            style=Pack(
+                color=self.semaforo_a_rgb(semaforo_estado),
+                font_size=18,
+                margin_top=-2  # ajuste fino
+            ),
+        )
+
         dataTable = None
         data = None
+
+        hoy = date.today() 
+        print(hoy.strftime("%d/%m/%Y"))
+
+
+        try:
+            cursor = self.sqliteConnection.cursor()
+            cursor.execute("""SELECT MAX(Fecha) FROM valores""")
+            dataTable = cursor.fetchall()
+        except sqlite3.Error as error:
+            logging.error("Error Buscar FECHA de la TABLA Valores: %s", error)
+            print("Error Buscar FECHA de la TABLA Valores: %s", error)
+        else:
+            if len(dataTable) == 0 or dataTable[0][0] is None:
+                label_pantalla_infoTickers.text = "No hay datos de hoy" 
+                label_pantalla_infoTickers.style.color = rgb(255, 255, 0)   
+            else:
+                max_fecha = dataTable[0][0]  # Tomamos el primer elemento de la tupla
+                if max_fecha == hoy.strftime("%d/%m/%Y"):
+                    label_pantalla_infoTickers.text = "Datos OK!"
+                    label_pantalla_infoTickers.style.color = rgb(0, 255, 0)
+                else:        
+                    label_pantalla_infoTickers.text = f"No hay datos de HOY. Fecha de datos: {max_fecha}"
+                    label_pantalla_infoTickers.style.update(
+                        color=rgb(255, 255, 0)
+                    )
+                    print("Dentro")
+                print("Fecha máxima:", max_fecha)
+
+            logging.info("Datos de TABLA Valores LEÍDOS correctamente.")
+            if dataTable is not None:
+                data = dataTable
 
         # acciones (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
         try:
             cursor = self.sqliteConnection.cursor()
-            cursor.execute("""SELECT nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno FROM valores""")
+            cursor.execute("""SELECT nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno FROM valores WHERE Fecha = ?""", (max_fecha,))
             dataTable = cursor.fetchall()
         except sqlite3.Error as error:
             logging.error("Error en el SELECT de la TABLA Valores: %s", error)
             print("Error en el SELECT de la TABLA Acciones: %s", error)
         finally:
-            label_pantalla_infoTickers.style.color = rgb(0, 255, 0)
             logging.info("Datos de TABLA Valores LEÍDOS correctamente.")
             if dataTable is not None:
                 data = dataTable
@@ -1226,7 +1274,9 @@ class BolsaPy(toga.App):
         )
 
         espaciador_horizontal = toga.Box(style=Pack(flex=1))
-        contenido_box.add(labelPantalla)
+        caja_titulo.add(labelPantalla)
+        caja_titulo.add(semaforo_label)
+        contenido_box.add(caja_titulo)
         contenido_box.add(label_pantalla_infoTickers)
         contenido_box.add(self.tabla)
         
@@ -1260,14 +1310,15 @@ class BolsaPy(toga.App):
         )
         # Texto inicial encima del botón
         self.label = toga.Label(
-            "Detalle Profundo Ticker: "+item,
-            style=Pack(margin_bottom=20, text_align=CENTER)
+            "Detalle Profundo Ticker: " + item,
+            style=Pack(text_align=CENTER)
         )
         semaforo_label = toga.Label(
             "●",
             style=Pack(
                 color=self.semaforo_a_rgb(semaforo_estado),
-                font_size=24,
+                font_size=18,
+                margin_top=-2  # ajuste fino
             ),
         )
 

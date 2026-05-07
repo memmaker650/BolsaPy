@@ -54,7 +54,7 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
             ("Máx Anual", "max_año"),
         ]
 
-        fila = toga.Box(style=Pack(direction=ROW, margin=5, align_items="center"))
+        fila = toga.Box(style=Pack(direction=ROW, align_items="center"))
         self.header_buttons = {}
             
         for titulo, clave in headers:
@@ -169,7 +169,6 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
     # -------------------------
     # Crear fila
     # -------------------------
-
     def _celda_nombre_clickable(self, item):
 
         def click(widget):
