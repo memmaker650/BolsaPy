@@ -12,6 +12,7 @@ author_email = "memmaker650@gmail.com"
 formal_name = "BolsaPy"
 description = "App to manage my Stocks"
 long_description = """More details about the app should go here.
+icon = "src/bolsapy/resources/icon"
 """
 sources = [
     "src/bolsapy",

@@ -30,11 +30,11 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
         self.add(self.header_box)
 
         # Scroll
-        self.filas_box = toga.Box(style=Pack(direction=COLUMN, height=1800))
+        self.filas_box = toga.Box(style=Pack(direction=COLUMN))
         scroll = toga.ScrollContainer(
             content=self.filas_box,
             horizontal=False,
-            vertical=True
+            vertical=True, flex=1
         )
 
         print("Tamaño Tabla Especial: ", self.filas_box.style.height)
@@ -186,7 +186,8 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
             on_press=click,
             style=Pack(flex=self.cols["nombre"],
             background_color="blue",
-            padding_right=10)
+            padding_right=15,
+            padding_left=5)
         )
 
         # estilo tipo label
