@@ -18,7 +18,7 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
         "max_año": 1,
     }
 
-    def __init__(self, datos, on_row_click=None):
+    def __init__(self, datos, on_row_click=None, altura_minima=560, altura_maxima=760):
         super().__init__(style=Pack(direction=COLUMN, flex=1))
 
         self.selected_item = None
@@ -26,18 +26,26 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
         self.on_row_click = on_row_click  # 👈 ahora sí existe
         self.header_buttons = {}
 
+        # La tabla necesita una altura visible generosa para que el scroll
+        # interno no se quede "corto" en pantallas grandes.
+        self.altura_minima = altura_minima
+        self.altura_maxima = altura_maxima
+        altura_estimada = 44 + max(len(datos), 1) * 34
+        self.altura_tabla = min(max(self.altura_minima, altura_estimada), self.altura_maxima)
+
         self.header_box = self._crear_cabecera()
         self.add(self.header_box)
 
         # Scroll
-        self.filas_box = toga.Box(style=Pack(direction=COLUMN))
+        self.filas_box = toga.Box(style=Pack(direction=COLUMN, flex=1))
         scroll = toga.ScrollContainer(
             content=self.filas_box,
             horizontal=False,
-            vertical=True, flex=1
+            vertical=True,
+            style=Pack(flex=1, height=self.altura_tabla)
         )
 
-        print("Tamaño Tabla Especial: ", self.filas_box.style.height)
+        print("Tamaño Tabla Especial: ", self.altura_tabla)
 
         self.add(scroll)
 

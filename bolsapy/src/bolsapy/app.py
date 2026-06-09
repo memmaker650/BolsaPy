@@ -1270,7 +1270,7 @@ class BolsaPy(toga.App):
         # =========================
         main_box = toga.Box(style=Pack(direction=COLUMN, margin=20, flex=1))
         contenido_box = toga.Box(
-            style=Pack(direction=COLUMN, margin_left=5, align_items=CENTER, flex=1)
+            style=Pack(direction=COLUMN, margin_left=5, align_items=CENTER)
         )
 
         labelPantalla = toga.Label(
@@ -1359,7 +1359,8 @@ class BolsaPy(toga.App):
 
         self.tabla = tablaCustom.TablaCustom(
             data_dict,
-            on_row_click=self.abrir_detalle   # 👈 AQUÍ está la conexión REAL
+            on_row_click=self.abrir_detalle,   # 👈 AQUÍ está la conexión REAL
+            altura_minima=620
         )   
 
         # Espaciador vertical para empujar la barra inferior hacia abajo
@@ -1367,19 +1368,19 @@ class BolsaPy(toga.App):
 
         # Barra inferior: botón izquierda, hueco en medio, botón derecha
         barra_inferior = toga.Box(
-            style=Pack(direction=ROW, flex=1)
+            style=Pack(direction=ROW, align_items=CENTER, margin=0)
         )
 
         boton_volver = toga.Button(
             "◀ Volver",
             on_press=self.volver_pantalla_inicial,
-            style=Pack(margin=10)
+            style=Pack(margin=5)
         )
 
         boton_anadirTicker = toga.Button(
             "+ Acciones Perso",
             on_press=self.ir_a_pantalla_formAccionesUser,
-            style=Pack(margin=10)
+            style=Pack(margin=5)
         )
 
         espaciador_horizontal = toga.Box(style=Pack(flex=1))
@@ -1388,7 +1389,6 @@ class BolsaPy(toga.App):
         contenido_box.add(caja_titulo)
         contenido_box.add(label_pantalla_infoTickers)
         contenido_box.add(self.tabla)
-        contenido_box.add(espaciador_vertical)
         
         barra_inferior.add(boton_volver)
         barra_inferior.add(espaciador_horizontal)
