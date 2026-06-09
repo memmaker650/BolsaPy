@@ -867,6 +867,9 @@ class BolsaPy(toga.App):
         self.tabla = toga.Table(
             headings=["Nombre", "TICKER", "Valor actual", "Δ ayer", "Δ semana", "Máx Anual", "Mín Anual"],
             data=data,
+            accessors=["nombre", "ticker", "valor_actual", "delta_ayer", "delta_semana", "max_año", "min_año"],
+            on_select=self._on_select_info_total_tickers,
+            on_activate=self._abrir_detalle_info_total_tickers,
             style=Pack(flex=1),
         )
 
@@ -879,7 +882,7 @@ class BolsaPy(toga.App):
         )
 
         # Espaciador vertical para empujar la barra inferior hacia abajo
-        espaciador_vertical = toga.Box(style=Pack(height=20))
+        espaciador_vertical = toga.Box(style=Pack(height=10))
 
         # Barra inferior: botón izquierda, hueco en medio, botón derecha
         barra_inferior = toga.Box(
@@ -898,6 +901,13 @@ class BolsaPy(toga.App):
             style=Pack(margin=10)
         )
 
+        self.boton_ver_detalle = toga.Button(
+            "Ver detalle",
+            on_press=self._abrir_detalle_info_total_tickers,
+            enabled=False,
+            style=Pack(margin=10)
+        )
+
         espaciador_horizontal = toga.Box(style=Pack(flex=1))
         contenido_box.add(labelPantalla)
         contenido_box.add(label_pantalla_infoTickers)
@@ -905,6 +915,7 @@ class BolsaPy(toga.App):
         
         barra_inferior.add(boton_volver)
         barra_inferior.add(espaciador_horizontal)
+        barra_inferior.add(self.boton_ver_detalle)
         barra_inferior.add(boton_anadirTicker)
 
         main_box.add(contenido_box)
@@ -915,6 +926,24 @@ class BolsaPy(toga.App):
 
     def ir_a_pantalla_infoTotalTickers(self, widget):
         self.main_window.content = self.construir_pantalla_infoTotalTickers()
+
+    def _on_select_info_total_tickers(self, widget):
+        if hasattr(self, "boton_ver_detalle") and self.boton_ver_detalle is not None:
+            self.boton_ver_detalle.enabled = widget.selection is not None
+
+    def _abrir_detalle_info_total_tickers(self, widget):
+        if not hasattr(self, "tabla") or self.tabla is None:
+            return
+
+        item = self.tabla.selection
+        if item is None:
+            return
+
+        ticker = getattr(item, "ticker", None)
+        if not ticker:
+            return
+
+        self.main_window.content = self.construir_pantalla_detalleProfundoTicker(ticker)
 
     # -------- Pantalla 3 --------
     def construir_pantalla_detalles(self):
@@ -1045,7 +1074,7 @@ class BolsaPy(toga.App):
             self.progress.max = self.total
             self.progress.value = actual
             if actual == self.total:
-                self.label.text = f"Procesando {actual} de {self.total} --> FIN"
+                self.label.text = f"Procesando {actual} de {self.total} FIN"
                 self.label.style.color = rgb(0, 255, 0)
             else:
                 self.label.text = f"Procesando {actual} de {self.total}"

@@ -186,8 +186,8 @@ class TablaCustom(toga.Box):   # 👈 MUY IMPORTANTE
             on_press=click,
             style=Pack(flex=self.cols["nombre"],
             background_color="blue",
-            padding_right=15,
-            padding_left=5)
+            margin_right=15,
+            margin_left=5)
         )
 
         # estilo tipo label
