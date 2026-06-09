@@ -4,6 +4,8 @@ App to manage my Stocks
 import datetime
 import sqlite3
 import logging
+from collections import defaultdict
+from numpy import empty
 import toga
 from toga.style import Pack
 from toga.style.pack import CENTER, COLUMN, ROW, LEFT, RIGHT, END
@@ -1132,7 +1134,7 @@ class BolsaPy(toga.App):
 
         tituloSreen5 = "Añadir Nuevo Ticker a la lista. " + self.label_estado
 
-        self.label_pantalla_dnuevoTicker = toga.Label(
+        self.label_pantalla_nuevoTicker = toga.Label(
             tituloSreen5,
             style=Pack(margin_bottom=20, text_align=CENTER)
         )
@@ -1433,7 +1435,7 @@ class BolsaPy(toga.App):
 
         fila1.add(toga.Label(self.buscarNombrePorTicker(item), style=Pack(width=150)))
         fila1.add(toga.Label(item, style=Pack(width=100)))
-        fila1.add(toga.Label("210.35", style=Pack(width=100)))
+        fila1.add(toga.Label(self.SaberMercado(item), style=Pack(width=100)))
 
         titulo2 = toga.Label(
             "INFO ACCIÓN :",
@@ -1448,15 +1450,21 @@ class BolsaPy(toga.App):
 
         fila_CabAccion = toga.Box(style=Pack(direction=ROW))
 
-        fila_CabAccion.add(toga.Label("Apple", style=Pack(width=150)))
-        fila_CabAccion.add(toga.Label("AAPL", style=Pack(width=100)))
-        fila_CabAccion.add(toga.Label("210.35", style=Pack(width=100)))
+        fila_CabAccion.add(toga.Label("Valor Hoy", style=Pack(width=150)))
+        fila_CabAccion.add(toga.Label("1 Semana", style=Pack(width=100)))
+        fila_CabAccion.add(toga.Label("1 Mes", style=Pack(width=100)))
+        fila_CabAccion.add(toga.Label("3 Meses", style=Pack(width=100)))
+        fila_CabAccion.add(toga.Label("6 Meses", style=Pack(width=100)))
 
         filaAccion = toga.Box(style=Pack(direction=ROW))
+        datos = actualiza_bolsa.StockService.obtener_metricas("REP.MC")
 
-        filaAccion.add(toga.Label("Apple", style=Pack(width=150)))
-        filaAccion.add(toga.Label("AAPL", style=Pack(width=100)))
-        filaAccion.add(toga.Label("210.35", style=Pack(width=100)))
+
+        filaAccion.add(toga.Label(datos['precio_actual'], style=Pack(width=150)))
+        filaAccion.add(toga.Label(datos['var_1_semana'], style=Pack(width=100)))
+        filaAccion.add(toga.Label(datos['var_1_mes'], style=Pack(width=100)))
+        filaAccion.add(toga.Label(datos['var_3_meses'], style=Pack(width=100)))
+        filaAccion.add(toga.Label(datos['var_6_meses'], style=Pack(width=100)))
 
         tituloDVD = toga.Label(
             "INFO DIVIDENDO :",
@@ -1489,32 +1497,68 @@ class BolsaPy(toga.App):
 
         # Fila 3 : Info sobre los límites.
         # -----------------------------------------
+        tituloLimAlerta = toga.Label(
+            "Límites ALerta Usuario :",
+            style=Pack(
+                flex=1,
+                text_align=CENTER,
+                background_color="Darkgreen",
+                color=rgb(0, 0, 0),
+                font_weight="bold"
+            )
+        )
         fila_Cab3 = toga.Box(style=Pack(direction=ROW))
 
-        fila_Cab3.add(toga.Label("Dividendos?", style=Pack(width=150)))
-        fila_Cab3.add(toga.Label("Veces/Año", style=Pack(width=100)))
-        fila_Cab3.add(toga.Label("Dividendo 12M", style=Pack(width=100)))
-        fila_Cab3.add(toga.Label("Rendimiento Estimado", style=Pack(width=100)))
+        fila_Cab3.add(toga.Label("Límite Alerta ?", style=Pack(width=150)))
+        fila_Cab3.add(toga.Label("Tipo", style=Pack( width=100)))
+        fila_Cab3.add(toga.Label("Valor", style=Pack(width=100)))
 
-        resultadoThresholds = self.hayLimite_Alerta(item)
-        #if resultadoThresholds["paga_dividendos"]:
-        #    labelThresholds = "Sí"
-        #else:
-        #    labelThresholds = "No"
+        resultadoThresholds = self.existeLimiteAlerta(item)
+        if resultadoThresholds:
+            labelThresholds = "Sí"
+        else:
+            labelThresholds = "No"
         fila3 = toga.Box(style=Pack(direction=ROW))
-        #
-        #fila3.add(toga.Label(labelThresholds, style=Pack(width=150)))
-        fila3.add(toga.Label(resultadoDVD["frecuencia_anual_aprox"], style=Pack(width=100)))
-        fila3.add(toga.Label(resultadoDVD["dividendo_12m"], style=Pack(width=100)))
-        fila3.add(toga.Label(str(resultadoDVD["yield_estimado_%"])+"%", style=Pack(width=100)))
+        
+        fila3 = toga.Box(style=Pack(direction=COLUMN))
+
+        if resultadoThresholds:
+        
+            DatosLim = self.TraerDatosLimiteAlerta(item)
+            primera = True
+
+            for clave, valor in DatosLim[item].items():
+            
+                fila = toga.Box(style=Pack(direction=ROW))
+
+                if primera:
+                    fila.add(toga.Label(labelThresholds, style=Pack(width=150)))
+                    primera = False
+                else:
+                    fila.add(toga.Label("", style=Pack(width=150)))
+
+                fila.add(toga.Label(clave, style=Pack(width=100)))
+                fila.add(toga.Label(str(valor), style=Pack(width=100)))
+
+                fila3.add(fila)
+
+        else:
+            fila = toga.Box(style=Pack(direction=ROW))
+            fila.add(toga.Label("", style=Pack(width=150)))
+            fila.add(toga.Label("", style=Pack(width=100)))
+            fila.add(toga.Label("", style=Pack(width=100)))
+
+            fila3.add(fila)
 
         table_box.add(fila_titulo)
         table_box.add(fila1)
         table_box.add(titulo2)
+        table_box.add(fila_CabAccion)
         table_box.add(filaAccion)
         table_box.add(tituloDVD)
         table_box.add(fila_Cab2)
         table_box.add(fila2)
+        table_box.add(tituloLimAlerta)
         table_box.add(fila_Cab3)
         table_box.add(fila3)
         
@@ -1567,10 +1611,10 @@ class BolsaPy(toga.App):
             style=Pack(direction=COLUMN, margin_left=40, align_items='start')
         )
 
-        tituloPantallaAlerta = "Añadir Nuevo/s Límites de valor Sup/Inf para Alerta. " + self.label_estado
+        self.tituloPantallaAlerta = "Añadir Nuevo/s Límites de valor Sup/Inf para Alerta. " + self.label_estado
 
         self.label_pantalla_LimiteNuevaAlerta = toga.Label(
-            tituloPantallaAlerta,
+            self.tituloPantallaAlerta,
             style=Pack(margin_bottom=20, text_align=CENTER)
         )
 
@@ -1674,6 +1718,31 @@ class BolsaPy(toga.App):
     def PantallaNuevaAlerta(self, item):
         self.main_window.content = self.construir_pantalla_nuevoLimiteAlerta(item)
 
+    def SaberMercado(self, ticker) -> str:
+        if ticker.endswith(".MC"):
+            return "España (BME)"
+        elif ticker.endswith(".DE"):
+            return "Alemania (XETRA)"
+        elif ticker.endswith(".PA"):
+            return "Francia (Euronext Paris)"
+        elif ticker.endswith(".ST"):
+            return "Suecia (Stockholm)"
+        elif ticker.endswith(".TO"):
+            return "Canadá (Toronto TSX)"
+        elif ticker.endswith(".AX"):
+            return "Australia (ASX)"
+        elif ticker.endswith(".KS") or ticker.endswith(".KQ"):
+            return "Corea del Sur (KRX)"
+        elif ticker.endswith(".T"):
+            return "Japón (Tokyo Exchange)"
+        elif ticker.endswith(".BA"):
+            return "Argentina (BYMA)"
+        # USA normalmente sin sufijo o con .US
+        elif ticker.endswith(".US") or ticker.isalpha():
+            return "USA (NASDAQ/NYSE)"
+        else:
+            return "Desconocido"
+
     def hayLimite_Alerta(self, ticker) -> bool:
         cursor = self.sqliteConnection.cursor()
 
@@ -1692,6 +1761,36 @@ class BolsaPy(toga.App):
         """, (nombre, ticker))
 
         return cursor.fetchone() is not None
+
+    def existeLimiteAlerta(self, ticker) -> bool:
+        cursor = self.sqliteConnection.cursor()
+
+        cursor.execute("""
+            SELECT 1 FROM LimitesAlerta 
+            WHERE ticker = ?
+        """, (ticker,))
+
+        return cursor.fetchone() is not None
+
+    def TraerDatosLimiteAlerta(self, ticker) -> dict:
+        cursor = self.sqliteConnection.cursor()
+
+        cursor.execute("""
+            SELECT ticker, tipo_limite, valor FROM LimitesAlerta 
+            WHERE ticker = ?
+        """, (ticker,))
+
+        rows = cursor.fetchall()
+
+        # reconstruir diccionario
+        AlertaLimDatos = defaultdict(dict)
+
+        for ticker, tipo_limite, valor in rows:
+            AlertaLimDatos[ticker][tipo_limite] = valor
+
+        print(AlertaLimDatos)    
+
+        return AlertaLimDatos
 
     def nombre_con_otro_ticker(self, nombre, ticker) -> bool:
         cursor = self.sqliteConnection.cursor()
@@ -1738,7 +1837,7 @@ class BolsaPy(toga.App):
             cursor.execute("""CREATE TABLE IF NOT EXISTS LimitesAlerta (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT,
-            tipo_limite TEXT UNIQUE,
+            tipo_limite TEXT,
             valor INTEGER,
             UNIQUE(tipo_limite, ticker)
             )""")
@@ -1779,46 +1878,45 @@ class BolsaPy(toga.App):
         self.label_pantalla_nuevoTicker.text += self.valor_estado
 
     def cargar_limiteAlerta(self, tck):
-        ok = False
 
-        print("Dentro Cargar BDD Límites Alerta.")
+        if self.tipo_limite is empty:
+             print("User debe rellenar VALOR")
+             ok = False
+        else:
+            try:
+                cursor = self.sqliteConnection.cursor()
 
-        try:
-            cursor = self.sqliteConnection.cursor()
+                self.valor_limite = self.valor_limite.value
+                print("Caja seleccion Tipo Límite: ", self.tipo_limite.value)
+                if self.tipo_limite.value == 'Precio Superior': 
+                    tipo_alerta = 'superior'
+                else:
+                    tipo_alerta = 'inferior'
 
-            self.valor_limite = self.valor_limite.value
-            print("Caja seleccion Tipo Límite: ", self.tipo_limite.value)
-            if self.tipo_limite.value == 'Precio Superior': 
-                tipo_alerta = 'superior'
-            else:
-                tipo_alerta = 'inferior'
+                ticker = (tck or "").strip()
 
-            ticker = (tck or "").strip()
+                cursor.execute("""
+                    INSERT INTO limitesAlerta (tipo_limite, valor, ticker)
+                    VALUES (?, ?, ?) ON CONFLICT(tipo_limite, ticker) DO NOTHING
+                """, (tipo_alerta, self.valor_limite, ticker))
 
-            cursor.execute("""
-                INSERT INTO limitesAlerta (tipo_limite, valor, ticker)
-                VALUES (?, ?, ?) ON CONFLICT(tipo_limite, ticker) DO NOTHING
-            """, (tipo_alerta, self.valor_limite, ticker))
+                self.sqliteConnection.commit()
+                ok = True
 
-            self.sqliteConnection.commit()
-            return True
+            except sqlite3.Error as error:
+                logging.error("Error al guardar Límite Alerta: %s", error)
+                print("Error al guardar Límite Alerta: %s", error)
+                ok = False
 
-        except sqlite3.Error as error:
-            logging.error("Error al guardar Límite Alerta: %s", error)
-            print("Error al guardar Límite Alerta: %s", error)
-            return False
-
-        # if ok:
-        #     self.valor_estado = "✅"
-        #     self.label_pantalla_nuevoTicker.text += self.valor_estado
-        #     print("Límite Alerta guardado.")
-        #     return
-        # else:
-        #     self.valor_estado = "❌"
-        #     self.label_pantalla_nuevoTicker.text += self.valor_estado
-        #     print("Error al guardar Límite Alerta")
-        # 
-        # self.label_pantalla_nuevoTicker.text += self.valor_estado
+        if ok:
+            self.label_estado = "✅"
+            self.label_pantalla_LimiteNuevaAlerta.text += self.label_estado
+            print("Límite Alerta guardado.")
+            return
+        else:
+            self.label_estado = "❌"
+            self.label_pantalla_LimiteNuevaAlerta.text += self.label_estado
+            print("Error al guardar Límite Alerta")
 
     def on_cargarValoracion(self, widget):
         datos = {
@@ -1839,12 +1937,12 @@ class BolsaPy(toga.App):
 
         if ok:
             self.valor_estado = "✅"
-            self.label_pantalla_nuevoTicker.text += self.valor_estado
+            self.label_pantalla_Valoracion.text += self.valor_estado
             print("Ticker guardado correctamente")
             return
         else:
             self.valor_estado = "❌"
-            self.label_pantalla_nuevoTicker.text += self.valor_estado
+            self.label_pantalla_Valoracion.text += self.valor_estado
             print("Error al guardar ticker")
         
         self.label_pantalla_nuevoTicker.text += self.valor_estado

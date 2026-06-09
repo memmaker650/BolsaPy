@@ -462,7 +462,54 @@ class ActualizaBolsa:
             "ultimos_pagos": ultimos_pagos,
             "dividendo_12m": round(ult_12m, 2),
             "yield_estimado_%": round(dividend_yield, 2)
-        }       
+        } 
+
+class StockService:
+
+    @staticmethod
+    def obtener_metricas(ticker: str):
+        """
+        Devuelve:
+        - precio actual
+        - variación 1 semana
+        - variación 1 mes
+        - variación 3 meses
+        - variación 6 meses
+        """
+
+        stock = yf.Ticker(ticker)
+
+        hist = stock.history(period="6mo")  # datos suficientes
+
+        if hist.empty:
+            return None
+
+        precio_actual = hist["Close"].iloc[-1]
+
+        def variacion_dias(dias):
+            fecha_objetivo = datetime.today() - timedelta(days=dias)
+            
+            hist.index = hist.index.tz_localize(None)
+            fecha_objetivo = pd.Timestamp.now() - pd.Timedelta(days=dias)
+            hist_filtrado = hist[hist.index >= fecha_objetivo]
+
+            if hist_filtrado.empty:
+                return None
+
+            precio_pasado = hist_filtrado["Close"].iloc[0]
+
+            return ((precio_actual - precio_pasado) / precio_pasado) * 100
+
+        resultado = {
+            "ticker": ticker,
+            "precio_actual": round(precio_actual, 2),
+            "var_1_semana": round(variacion_dias(7), 2),
+            "var_1_mes": round(variacion_dias(30), 2),
+            "var_3_meses": round(variacion_dias(90), 2),
+            "var_6_meses": round(variacion_dias(180), 2),
+        }
+
+        return resultado      
 
 def main():
     app = ActualizaBolsa()
