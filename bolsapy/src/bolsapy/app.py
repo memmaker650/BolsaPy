@@ -678,7 +678,7 @@ class BolsaPy(toga.App):
         else:
             valor6 = valor6.value
         
-        f = f = (valor1.value or "").strip() or datetime.today().strftime("%Y-%m-%d")
+        f = f = (valor1.value or "").strip() or datetime.today().strftime("%Y/%m/%d")
         print("Fecha de Compra : ", f)
         print("Mercado : ", valor2.value)
         print("Nombre : ", valor3.value)
@@ -844,18 +844,40 @@ class BolsaPy(toga.App):
         # acciones (id INTEGER PRIMARY KEY, usuario, elemento TEXT, descripcion TEXT, marca TEXT, fechaInsercion Date, distanciaLímite integer, tiempoLímite integer, activo BOOLEAN)
         try:
             cursor = self.sqliteConnection.cursor()
-            cursor.execute("""SELECT nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno FROM valores""")
+            cursor.execute("""SELECT nombre, tickers, Valor_actual, Delta_ayer, Delta_semana, Maximo_Agno, Minimo_Agno
+                FROM valores
+                WHERE fecha = (
+                    SELECT MAX(fecha)
+                    FROM valores)""")
             dataTable = cursor.fetchall()
         except sqlite3.Error as error:
+            self.label_estado = "❌"
             logging.error("Error en el SELECT de la TABLA Valores: %s", error)
             print("Error en el SELECT de la TABLA Acciones: %s", error)
         finally:
+            self.label_estado  += "✅"
             label_pantalla_infoTickers.style.color = rgb(0, 255, 0)
             logging.info("Datos de TABLA Valores LEÍDOS correctamente.")
             if dataTable is not None:
                 data = dataTable
 
+        labelPantalla.text += self.label_estado
+
+        cursor.execute("""SELECT MAX(fecha)
+                    FROM valores""")
+        dataFecha = cursor.fetchone()[0]
+
+        hoy = date.today().strftime("%Y/%m/%d")
+        print("Hoy: ", hoy)
+        print("DataFecha: ", dataFecha)
+        if hoy == dataFecha:
+            label_pantalla_infoTickers.text ="Datos Actualizados"
+        else:
+            label_pantalla_infoTickers.text ="Datos NO Actualizados, Fecha: " + str(dataFecha)
+            label_pantalla_infoTickers.style.color = rgb(255, 0, 0)           
+ 
         data = list(data) if data is not None else []
+        data = [(i + 1, *fila) for i, fila in enumerate(data)]
         self._tabla_ordenable_data = list(data)
         # Altura según nº de filas (Toga no la calcula sola). Tope para listas largas → scroll dentro de la tabla.
         _h_cabecera, _h_fila, _h_max = 28, 22, 520
@@ -865,13 +887,20 @@ class BolsaPy(toga.App):
 
         # Definir tabla con cabeceras
         self.tabla = toga.Table(
-            headings=["Nombre", "TICKER", "Valor actual", "Δ ayer", "Δ semana", "Máx Anual", "Mín Anual"],
+            headings=["#", "Nombre", "TICKER", "Valor actual", "Δ ayer", "Δ semana", "Máx Anual", "Mín Anual"],
             data=data,
-            accessors=["nombre", "ticker", "valor_actual", "delta_ayer", "delta_semana", "max_año", "min_año"],
+            accessors=["numero", "nombre", "ticker", "valor_actual", "delta_ayer", "delta_semana", "max_año", "min_año"],
             on_select=self._on_select_info_total_tickers,
             on_activate=self._abrir_detalle_info_total_tickers,
             style=Pack(flex=1),
         )
+        # En Cocoa podemos estrechar la primera columna sin afectar al resto.
+        try:
+            primera_columna = self.tabla._impl.columns[0]
+            primera_columna.minWidth = 5
+            primera_columna.width = 5
+        except Exception:
+            pass
 
         # Contenedor con scroll
         scroll = toga.ScrollContainer(
@@ -1872,6 +1901,67 @@ class BolsaPy(toga.App):
             )""")
             self.sqliteConnection.commit()
             return True
+        except sqlite3.Error as error:
+            logging.error("Error en el CREAR la TABLA LimitesAlerta: %s", error)
+            print("Error en el CREAR la TABLA LimitesAlerta: %s", error)
+            return False
+
+    # Buscar entradas en doble y eliminar el más antiguo si necesario.
+    def chequearTablaAlertThresholds(self, tick) -> bool:
+        try:
+            cursor = self.sqliteConnection.cursor()
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM LimitesAlerta
+                WHERE ticker = ?
+            """, (tick,))
+
+            count = cursor.fetchone()[0]
+            return count > 2
+        except sqlite3.Error as error:
+            logging.error("Error en la tabla LimitesAlerta: %s", error)
+            print("Error en la tabla LimitesAlerta: %s", error)
+            return False
+
+    # Buscar entradas en doble y eliminar el más antiguo si necesario.
+    def chequearyBorrarThresholdEnDoble(self, tick, tipo_new, valor_new) -> bool:
+        try:
+            cursor = self.sqliteConnection.cursor()
+            # Primero pruebo si es tipo SUPERIOR
+            cursor.execute("""
+            SELECT valor
+            FROM LimitesAlerta
+            WHERE ticker = ?
+            tipo_limite = ?
+            """, (tick, tipo_new))
+
+            rows = cursor.fetchall()
+
+            if len(rows) > 1:
+                for valor in rows:
+                    if tipo_new == 'superior' and valor_new > valor:
+                        #reemplazar el límite superior.
+                        cursor.execute("""
+                            UPDATE limitesAlerta SET valor =  ? 
+                            WHERE ticker = ? and tipo = ?
+                            """, (valor_new, tick, tipo_new))
+
+                        self.sqliteConnection.commit()
+                        return True
+                    else:
+                        return True
+            else:
+                if rows is None:
+                    return False
+                else: 
+                    cursor.execute("""
+                        INSERT INTO limitesAlerta (tipo_limite, valor, ticker)
+                        VALUES (?, ?, ?)
+                        """, (tipo_new, valor_new, tick))
+
+                    self.sqliteConnection.commit()
+                    return True
+
         except sqlite3.Error as error:
             logging.error("Error en el CREAR la TABLA LimitesAlerta: %s", error)
             print("Error en el CREAR la TABLA LimitesAlerta: %s", error)

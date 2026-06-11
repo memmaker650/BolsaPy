@@ -251,7 +251,7 @@ class ActualizaBolsa:
         wb.save(self.SALIDA_XLSX)
 
         # Obtengo la fecha de hoy
-        hoy_str = datetime.today().strftime("%d/%m/%Y")
+        hoy_str = datetime.today().strftime("%Y/%m/%d")
 
         for nombre, ticker in self.TICKERS.items():
             print(f"Procesando {nombre} ({ticker})...")
