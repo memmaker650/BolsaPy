@@ -2,6 +2,7 @@
 import sys
 import os
 import math
+import json
 import time
 import datetime as dt
 import concurrent.futures
@@ -19,6 +20,809 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
+
+
+def _normalizar_historial_yfinance(data, ticker):
+    """Devuelve un DataFrame con columnas simples y eje temporal limpio."""
+    if data.empty:
+        return data
+
+    if isinstance(data.columns, pd.MultiIndex):
+        if ticker in data.columns.get_level_values(-1):
+            data = data.xs(ticker, axis=1, level=-1)
+        else:
+            data.columns = data.columns.get_level_values(0)
+
+    if getattr(data.index, "tz", None) is not None:
+        data = data.copy()
+        data.index = data.index.tz_localize(None)
+
+    return data.sort_index()
+
+
+def _construir_html_grafica_linea(ticker, puntos):
+    """Crea una página HTML autónoma con una gráfica interactiva en canvas."""
+    titulo = f"{ticker} - últimos 3 meses"
+    puntos_json = json.dumps(puntos, ensure_ascii=True)
+
+    return f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{titulo}</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f7f8fc;
+      --panel: #ffffff;
+      --text: #10233f;
+      --muted: #61708a;
+      --grid: rgba(16, 35, 63, 0.08);
+      --line: #2f6fed;
+      --accent: #f59e0b;
+      --shadow: 0 10px 30px rgba(16, 35, 63, 0.10);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(180deg, #eef3ff 0%, var(--bg) 50%, #eef2f7 100%);
+      color: var(--text);
+    }}
+    .wrap {{
+      padding: 14px;
+    }}
+    .card {{
+      background: var(--panel);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 14px 14px 10px;
+      border: 1px solid rgba(16, 35, 63, 0.08);
+    }}
+    .header {{
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }}
+    h1 {{
+      font-size: 18px;
+      margin: 0;
+      letter-spacing: 0.2px;
+    }}
+    .value {{
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--line);
+    }}
+    .meta {{
+      font-size: 12px;
+      color: var(--muted);
+    }}
+    .chart-shell {{
+      position: relative;
+      width: 100%;
+      height: 230px;
+    }}
+    canvas {{
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(47, 111, 237, 0.04), rgba(47, 111, 237, 0.01));
+    }}
+    .tooltip {{
+      position: absolute;
+      pointer-events: none;
+      transform: translate(-50%, -110%);
+      min-width: 130px;
+      max-width: 180px;
+      background: rgba(16, 35, 63, 0.96);
+      color: white;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.3;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+      opacity: 0;
+      transition: opacity 0.12s ease;
+      z-index: 2;
+    }}
+    .footer {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }}
+    .pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(47, 111, 237, 0.08);
+      color: var(--text);
+      border: 1px solid rgba(47, 111, 237, 0.18);
+    }}
+    .dot {{
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--line);
+      display: inline-block;
+    }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="header">
+        <div>
+          <h1>{titulo}</h1>
+          <div class="meta">Pasa el ratón o toca un punto para ver la fecha y el cierre exacto.</div>
+        </div>
+        <div class="value" id="currentValue">--</div>
+      </div>
+      <div class="chart-shell" id="chartShell">
+        <canvas id="chart"></canvas>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+      <div class="footer">
+        <div class="pill"><span class="dot"></span><span id="selectedDate">Sin selección</span></div>
+        <div id="rangeInfo"> </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const points = {puntos_json};
+    const canvas = document.getElementById("chart");
+    const shell = document.getElementById("chartShell");
+    const tooltip = document.getElementById("tooltip");
+    const currentValue = document.getElementById("currentValue");
+    const selectedDate = document.getElementById("selectedDate");
+    const rangeInfo = document.getElementById("rangeInfo");
+    const ctx = canvas.getContext("2d");
+    const pad = {{ left: 52, right: 18, top: 18, bottom: 34 }};
+    let hoveredIndex = -1;
+    let selectedIndex = -1;
+
+    function resizeCanvas() {{
+      const rect = shell.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    }}
+
+    function formatPrice(value) {{
+      return Number(value).toLocaleString("es-ES", {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+    }}
+
+    function getPlotArea() {{
+      const rect = canvas.getBoundingClientRect();
+      return {{
+        x: pad.left,
+        y: pad.top,
+        w: rect.width - pad.left - pad.right,
+        h: rect.height - pad.top - pad.bottom,
+      }};
+    }}
+
+    function findBounds() {{
+      const closes = points.map(p => p.close);
+      return {{
+        min: Math.min(...closes),
+        max: Math.max(...closes),
+      }};
+    }}
+
+    function getPointPosition(index) {{
+      const area = getPlotArea();
+      const bounds = findBounds();
+      const x = points.length === 1
+        ? area.x + area.w / 2
+        : area.x + (index / (points.length - 1)) * area.w;
+      const range = Math.max(bounds.max - bounds.min, 0.0001);
+      const y = area.y + area.h - ((points[index].close - bounds.min) / range) * area.h;
+      return {{ x, y }};
+    }}
+
+    function drawGrid(area, bounds) {{
+      ctx.save();
+      ctx.strokeStyle = "rgba(16, 35, 63, 0.08)";
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "rgba(16, 35, 63, 0.60)";
+      ctx.font = "12px sans-serif";
+      ctx.textBaseline = "middle";
+
+      const gridLines = 4;
+      for (let i = 0; i <= gridLines; i++) {{
+        const y = area.y + (area.h / gridLines) * i;
+        ctx.beginPath();
+        ctx.moveTo(area.x, y);
+        ctx.lineTo(area.x + area.w, y);
+        ctx.stroke();
+        const value = bounds.max - ((bounds.max - bounds.min) / gridLines) * i;
+        ctx.textAlign = "right";
+        ctx.fillText(formatPrice(value), area.x - 8, y);
+      }}
+
+      const labels = Math.min(points.length, 6);
+      for (let i = 0; i < labels; i++) {{
+        const index = labels === 1 ? 0 : Math.round((points.length - 1) * (i / (labels - 1)));
+        const pos = getPointPosition(index);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, area.y);
+        ctx.lineTo(pos.x, area.y + area.h);
+        ctx.stroke();
+        ctx.textAlign = "center";
+        ctx.fillText(points[index].date, pos.x, area.y + area.h + 16);
+      }}
+      ctx.restore();
+    }}
+
+    function drawLine(area) {{
+      ctx.save();
+      ctx.beginPath();
+      points.forEach((_, index) => {{
+        const pos = getPointPosition(index);
+        if (index === 0) {{
+          ctx.moveTo(pos.x, pos.y);
+        }} else {{
+          ctx.lineTo(pos.x, pos.y);
+        }}
+      }});
+      ctx.strokeStyle = "#2f6fed";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      const first = getPointPosition(0);
+      const last = getPointPosition(points.length - 1);
+      const gradient = ctx.createLinearGradient(0, 0, 0, area.y + area.h);
+      gradient.addColorStop(0, "rgba(47, 111, 237, 0.26)");
+      gradient.addColorStop(1, "rgba(47, 111, 237, 0.02)");
+      ctx.lineTo(last.x, area.y + area.h);
+      ctx.lineTo(first.x, area.y + area.h);
+      ctx.closePath();
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      ctx.restore();
+    }}
+
+    function drawMarkers() {{
+      const index = hoveredIndex >= 0 ? hoveredIndex : selectedIndex;
+      if (index < 0) return;
+      const pos = getPointPosition(index);
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(16, 35, 63, 0.35)";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pad.top);
+      ctx.lineTo(pos.x, canvas.getBoundingClientRect().height - pad.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "#f59e0b";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }}
+
+    function draw() {{
+      if (!points.length) return;
+      const area = getPlotArea();
+      const bounds = findBounds();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid(area, bounds);
+      drawLine(area);
+      drawMarkers();
+
+      const active = hoveredIndex >= 0 ? hoveredIndex : selectedIndex;
+      if (active >= 0) {{
+        const p = points[active];
+        currentValue.textContent = formatPrice(p.close) + " €";
+        selectedDate.textContent = p.date;
+        rangeInfo.textContent = "Mín: " + formatPrice(bounds.min) + " €  |  Máx: " + formatPrice(bounds.max) + " €";
+      }} else {{
+        currentValue.textContent = formatPrice(points[points.length - 1].close) + " €";
+        selectedDate.textContent = "Último cierre: " + points[points.length - 1].date;
+        rangeInfo.textContent = "Mín: " + formatPrice(bounds.min) + " €  |  Máx: " + formatPrice(bounds.max) + " €";
+      }}
+    }}
+
+    function nearestIndex(clientX) {{
+      if (!points.length) return -1;
+      const area = getPlotArea();
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      if (x <= area.x) return 0;
+      if (x >= area.x + area.w) return points.length - 1;
+      const ratio = (x - area.x) / area.w;
+      return Math.max(0, Math.min(points.length - 1, Math.round(ratio * (points.length - 1))));
+    }}
+
+    function updateTooltip(index, clientX, clientY) {{
+      if (index < 0) {{
+        tooltip.style.opacity = 0;
+        return;
+      }}
+      const p = points[index];
+      tooltip.innerHTML = "<strong>" + p.date + "</strong><br>" + formatPrice(p.close) + " €";
+      tooltip.style.left = clientX + "px";
+      tooltip.style.top = clientY + "px";
+      tooltip.style.opacity = 1;
+    }}
+
+    canvas.addEventListener("mousemove", (evt) => {{
+      hoveredIndex = nearestIndex(evt.clientX);
+      updateTooltip(hoveredIndex, evt.clientX - canvas.getBoundingClientRect().left, evt.clientY - canvas.getBoundingClientRect().top);
+      draw();
+    }});
+
+    canvas.addEventListener("mouseleave", () => {{
+      hoveredIndex = -1;
+      tooltip.style.opacity = 0;
+      draw();
+    }});
+
+    canvas.addEventListener("click", (evt) => {{
+      selectedIndex = nearestIndex(evt.clientX);
+      hoveredIndex = selectedIndex;
+      updateTooltip(selectedIndex, evt.clientX - canvas.getBoundingClientRect().left, evt.clientY - canvas.getBoundingClientRect().top);
+      draw();
+    }});
+
+    window.addEventListener("resize", resizeCanvas);
+    if (!points.length) {{
+      currentValue.textContent = "Sin datos";
+      selectedDate.textContent = "No hay historial disponible";
+      rangeInfo.textContent = "";
+    }}
+    resizeCanvas();
+  </script>
+</body>
+</html>"""
+
+
+def _construir_html_grafica_velas(ticker, puntos):
+    """Crea una página HTML autónoma con velas japonesas interactivas."""
+    titulo = f"{ticker} - últimos 3 meses"
+    puntos_json = json.dumps(puntos, ensure_ascii=True)
+
+    return f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{titulo}</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f7f8fc;
+      --panel: #ffffff;
+      --text: #10233f;
+      --muted: #61708a;
+      --grid: rgba(16, 35, 63, 0.08);
+      --up: #16a34a;
+      --down: #dc2626;
+      --shadow: 0 10px 30px rgba(16, 35, 63, 0.10);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(180deg, #eef3ff 0%, var(--bg) 50%, #eef2f7 100%);
+      color: var(--text);
+    }}
+    .wrap {{ padding: 14px; }}
+    .card {{
+      background: var(--panel);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 14px 14px 10px;
+      border: 1px solid rgba(16, 35, 63, 0.08);
+    }}
+    .header {{
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }}
+    h1 {{
+      font-size: 18px;
+      margin: 0;
+      letter-spacing: 0.2px;
+    }}
+    .value {{
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--up);
+    }}
+    .meta {{
+      font-size: 12px;
+      color: var(--muted);
+    }}
+    .chart-shell {{
+      position: relative;
+      width: 100%;
+      height: 280px;
+    }}
+    canvas {{
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(47, 111, 237, 0.04), rgba(47, 111, 237, 0.01));
+    }}
+    .tooltip {{
+      position: absolute;
+      pointer-events: none;
+      transform: translate(-50%, -110%);
+      min-width: 160px;
+      max-width: 220px;
+      background: rgba(16, 35, 63, 0.96);
+      color: white;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.3;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+      opacity: 0;
+      transition: opacity 0.12s ease;
+      z-index: 2;
+    }}
+    .footer {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }}
+    .pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(47, 111, 237, 0.08);
+      color: var(--text);
+      border: 1px solid rgba(47, 111, 237, 0.18);
+    }}
+    .dot {{
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--up);
+      display: inline-block;
+    }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="header">
+        <div>
+          <h1>{titulo}</h1>
+          <div class="meta">Pasa el ratón o toca una vela para ver OHLC exacto.</div>
+        </div>
+        <div class="value" id="currentValue">--</div>
+      </div>
+      <div class="chart-shell" id="chartShell">
+        <canvas id="chart"></canvas>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+      <div class="footer">
+        <div class="pill"><span class="dot"></span><span id="selectedDate">Sin selección</span></div>
+        <div id="rangeInfo"> </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const points = {puntos_json};
+    const canvas = document.getElementById("chart");
+    const shell = document.getElementById("chartShell");
+    const tooltip = document.getElementById("tooltip");
+    const currentValue = document.getElementById("currentValue");
+    const selectedDate = document.getElementById("selectedDate");
+    const rangeInfo = document.getElementById("rangeInfo");
+    const ctx = canvas.getContext("2d");
+    const pad = {{ left: 54, right: 18, top: 18, bottom: 34 }};
+    let hoveredIndex = -1;
+    let selectedIndex = -1;
+
+    function resizeCanvas() {{
+      const rect = shell.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    }}
+
+    function formatPrice(value) {{
+      return Number(value).toLocaleString("es-ES", {{ minimumFractionDigits: 2, maximumFractionDigits: 2 }});
+    }}
+
+    function getPlotArea() {{
+      const rect = canvas.getBoundingClientRect();
+      return {{
+        x: pad.left,
+        y: pad.top,
+        w: rect.width - pad.left - pad.right,
+        h: rect.height - pad.top - pad.bottom,
+      }};
+    }}
+
+    function findBounds() {{
+      const highs = points.map(p => p.high);
+      const lows = points.map(p => p.low);
+      return {{
+        min: Math.min(...lows),
+        max: Math.max(...highs),
+      }};
+    }}
+
+    function getPointPosition(index) {{
+      const area = getPlotArea();
+      const bounds = findBounds();
+      const x = points.length === 1
+        ? area.x + area.w / 2
+        : area.x + (index / (points.length - 1)) * area.w;
+      return {{ x, bounds, area }};
+    }}
+
+    function priceToY(price, bounds, area) {{
+      const range = Math.max(bounds.max - bounds.min, 0.0001);
+      return area.y + area.h - ((price - bounds.min) / range) * area.h;
+    }}
+
+    function drawGrid(area, bounds) {{
+      ctx.save();
+      ctx.strokeStyle = "rgba(16, 35, 63, 0.08)";
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "rgba(16, 35, 63, 0.60)";
+      ctx.font = "12px sans-serif";
+      ctx.textBaseline = "middle";
+
+      const gridLines = 4;
+      for (let i = 0; i <= gridLines; i++) {{
+        const y = area.y + (area.h / gridLines) * i;
+        ctx.beginPath();
+        ctx.moveTo(area.x, y);
+        ctx.lineTo(area.x + area.w, y);
+        ctx.stroke();
+        const value = bounds.max - ((bounds.max - bounds.min) / gridLines) * i;
+        ctx.textAlign = "right";
+        ctx.fillText(formatPrice(value), area.x - 8, y);
+      }}
+
+      const labels = Math.min(points.length, 6);
+      for (let i = 0; i < labels; i++) {{
+        const index = labels === 1 ? 0 : Math.round((points.length - 1) * (i / (labels - 1)));
+        const pos = getPointPosition(index);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, area.y);
+        ctx.lineTo(pos.x, area.y + area.h);
+        ctx.stroke();
+        ctx.textAlign = "center";
+        ctx.fillText(points[index].date, pos.x, area.y + area.h + 16);
+      }}
+      ctx.restore();
+    }}
+
+    function drawCandles() {{
+      const area = getPlotArea();
+      const bounds = findBounds();
+      const candleWidth = Math.max(4, area.w / Math.max(points.length * 2.2, 12));
+
+      points.forEach((p, index) => {{
+        const {{ x }} = getPointPosition(index);
+        const openY = priceToY(p.open, bounds, area);
+        const closeY = priceToY(p.close, bounds, area);
+        const highY = priceToY(p.high, bounds, area);
+        const lowY = priceToY(p.low, bounds, area);
+        const up = p.close >= p.open;
+        const color = up ? "#16a34a" : "#dc2626";
+        const bodyTop = Math.min(openY, closeY);
+        const bodyHeight = Math.max(Math.abs(closeY - openY), 1.5);
+
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 1.5;
+
+        ctx.beginPath();
+        ctx.moveTo(x, highY);
+        ctx.lineTo(x, lowY);
+        ctx.stroke();
+
+        ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+        ctx.strokeRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+        ctx.restore();
+      }});
+    }}
+
+    function drawMarkers() {{
+      const index = hoveredIndex >= 0 ? hoveredIndex : selectedIndex;
+      if (index < 0) return;
+      const {{ x, bounds, area }} = getPointPosition(index);
+      const p = points[index];
+      const openY = priceToY(p.open, bounds, area);
+      const closeY = priceToY(p.close, bounds, area);
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(16, 35, 63, 0.35)";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, pad.top);
+      ctx.lineTo(x, canvas.getBoundingClientRect().height - pad.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = "#1d4ed8";
+      ctx.fillStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, openY, 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, closeY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }}
+
+    function draw() {{
+      if (!points.length) return;
+      const area = getPlotArea();
+      const bounds = findBounds();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid(area, bounds);
+      drawCandles();
+      drawMarkers();
+
+      const active = hoveredIndex >= 0 ? hoveredIndex : selectedIndex;
+      if (active >= 0) {{
+        const p = points[active];
+        currentValue.textContent = formatPrice(p.close) + " €";
+        selectedDate.textContent = p.date;
+        rangeInfo.textContent = "Mín: " + formatPrice(bounds.min) + " €  |  Máx: " + formatPrice(bounds.max) + " €";
+      }} else {{
+        currentValue.textContent = formatPrice(points[points.length - 1].close) + " €";
+        selectedDate.textContent = "Último cierre: " + points[points.length - 1].date;
+        rangeInfo.textContent = "Mín: " + formatPrice(bounds.min) + " €  |  Máx: " + formatPrice(bounds.max) + " €";
+      }}
+    }}
+
+    function nearestIndex(clientX) {{
+      if (!points.length) return -1;
+      const area = getPlotArea();
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      if (x <= area.x) return 0;
+      if (x >= area.x + area.w) return points.length - 1;
+      const ratio = (x - area.x) / area.w;
+      return Math.max(0, Math.min(points.length - 1, Math.round(ratio * (points.length - 1))));
+    }}
+
+    function updateTooltip(index, clientX, clientY) {{
+      if (index < 0) {{
+        tooltip.style.opacity = 0;
+        return;
+      }}
+      const p = points[index];
+      const trend = p.close >= p.open ? "Sube" : "Baja";
+      tooltip.innerHTML =
+        "<strong>" + p.date + "</strong><br>" +
+        trend + "<br>" +
+        "O: " + formatPrice(p.open) + " €<br>" +
+        "H: " + formatPrice(p.high) + " €<br>" +
+        "L: " + formatPrice(p.low) + " €<br>" +
+        "C: " + formatPrice(p.close) + " €";
+      tooltip.style.left = clientX + "px";
+      tooltip.style.top = clientY + "px";
+      tooltip.style.opacity = 1;
+    }}
+
+    canvas.addEventListener("mousemove", (evt) => {{
+      hoveredIndex = nearestIndex(evt.clientX);
+      updateTooltip(hoveredIndex, evt.clientX - canvas.getBoundingClientRect().left, evt.clientY - canvas.getBoundingClientRect().top);
+      draw();
+    }});
+
+    canvas.addEventListener("mouseleave", () => {{
+      hoveredIndex = -1;
+      tooltip.style.opacity = 0;
+      draw();
+    }});
+
+    canvas.addEventListener("click", (evt) => {{
+      selectedIndex = nearestIndex(evt.clientX);
+      hoveredIndex = selectedIndex;
+      updateTooltip(selectedIndex, evt.clientX - canvas.getBoundingClientRect().left, evt.clientY - canvas.getBoundingClientRect().top);
+      draw();
+    }});
+
+    window.addEventListener("resize", resizeCanvas);
+    if (!points.length) {{
+      currentValue.textContent = "Sin datos";
+      selectedDate.textContent = "No hay historial disponible";
+      rangeInfo.textContent = "";
+    }}
+    resizeCanvas();
+  </script>
+</body>
+</html>"""
+
+
+def generar_grafica_ticker_interactiva(ticker):
+    """Genera una gráfica interactiva HTML con el histórico de cierre."""
+    data = yf.download(ticker, period="3mo", auto_adjust=False, progress=False)
+    if data.empty:
+        return None
+
+    data = _normalizar_historial_yfinance(data, ticker)
+    if "Close" not in data.columns:
+        return None
+
+    serie = data["Close"].dropna()
+    if serie.empty:
+        return None
+
+    puntos = [
+        {
+            "date": idx.strftime("%d/%m/%Y"),
+            "close": float(valor),
+        }
+        for idx, valor in serie.items()
+    ]
+
+    return _construir_html_grafica_linea(ticker, puntos)
+
+
+def generar_velas_ticker_interactiva(ticker):
+    """Genera una gráfica interactiva HTML con velas japonesas."""
+    data = yf.download(ticker, period="3mo", auto_adjust=False, progress=False)
+    if data.empty:
+        return None
+
+    data = _normalizar_historial_yfinance(data, ticker)
+    columnas = ["Open", "High", "Low", "Close"]
+    if not set(columnas).issubset(set(data.columns)):
+        return None
+
+    data = data[columnas].copy().dropna(subset=columnas)
+    if data.empty:
+        return None
+
+    puntos = [
+        {
+            "date": idx.strftime("%d/%m/%Y"),
+            "open": float(fila["Open"]),
+            "high": float(fila["High"]),
+            "low": float(fila["Low"]),
+            "close": float(fila["Close"]),
+        }
+        for idx, fila in data.iterrows()
+    ]
+
+    return _construir_html_grafica_velas(ticker, puntos)
 
 
 def generar_grafica_ticker(ticker, output_dir):

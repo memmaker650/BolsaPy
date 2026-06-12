@@ -111,31 +111,28 @@ class BolsaPy(toga.App):
     }
 
     async def cargar_grafica(self, widget=None):
-        self.ruta_imagen = await self.loop.run_in_executor(
+        html = await self.loop.run_in_executor(
             None,
-            actualiza_bolsa.generar_grafica_ticker,
+            actualiza_bolsa.generar_grafica_ticker_interactiva,
             "AAPL",
-            self.app.paths.data
         )
 
-        # actualizar UI en hilo principal
-        if self.ruta_imagen:
-            self.imagen_grafica.image = toga.Image(str(self.ruta_imagen))
-            logging.info("Gráfica cargada")
+        if html:
+            self.imagen_grafica.set_content("https://bolsapy.local/", html)
+            logging.info("Gráfica interactiva cargada")
         else:
             logging.error("❌ Error al generar gráfica")
     
     async def cargarGraficaVelas(self, widget=None):
-        ruta = await self.loop.run_in_executor(
+        html = await self.loop.run_in_executor(
             None,
-            actualiza_bolsa.generar_velas_ticker,
+            actualiza_bolsa.generar_velas_ticker_interactiva,
             "AAPL",
-            self.app.paths.data
         )
 
-        if ruta:
-            self.imagenGraficaVelas.image = toga.Image(str(ruta))
-            logging.info("Velas cargadas")
+        if html:
+            self.imagenGraficaVelas.set_content("https://bolsapy.local/", html)
+            logging.info("Velas interactivas cargadas")
         else:
             logging.error("❌ Error al generar gráfica de velas")
 
@@ -1031,14 +1028,14 @@ class BolsaPy(toga.App):
         contenido_box.add(self.tabla)
 
         # En un ScrollContainer es mejor usar alto fijo que flex para forzar desbordamiento.
-        self.imagen_grafica = toga.ImageView(style=Pack(height=260, margin=10))
+        self.imagen_grafica = toga.WebView(style=Pack(height=260, margin=10))
         contenido_box.add(self.imagen_grafica)
 
         # 👇 lanzar tarea Generación Imagen Acción 3 meses en BACKGROUND
         self.app.add_background_task(self.cargar_grafica)
 
         # Cargar Gráfica de Velas
-        self.imagenGraficaVelas = toga.ImageView(style=Pack(height=320, margin=10))
+        self.imagenGraficaVelas = toga.WebView(style=Pack(height=320, margin=10))
         contenido_box.add(self.imagenGraficaVelas)
 
         # 👇 lanzar tarea Generación Imagen Acción 3 meses en BACKGROUND
